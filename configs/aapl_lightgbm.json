@@ -1,0 +1,26 @@
+{
+  "ticker": "AAPL",
+  "data_path": "data/AAPL_Apple_stock_data.csv",
+  "start": "2010-01-01",
+  "train_end": "2021-12-31",
+  "validation_end": "2023-12-31",
+  "test_end": "2025-12-31",
+  "holdout_end": "2026-08-27",
+  "window": 60,
+  "seed": 42,
+  "lightgbm": {
+    "n_estimators": 500,
+    "learning_rate": 0.03,
+    "num_leaves": 15,
+    "max_depth": 4,
+    "min_child_samples": 50,
+    "subsample": 0.8,
+    "subsample_freq": 1,
+    "colsample_bytree": 0.8,
+    "reg_lambda": 10.0,
+    "reg_alpha": 0.0,
+    "early_stopping_rounds": 30,
+    "n_jobs": 4,
+    "verbosity": -1
+  }
+}

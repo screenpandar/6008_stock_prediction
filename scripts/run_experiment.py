@@ -17,7 +17,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import numpy as np
-import torch
 
 from src.baselines import predict_baselines
 from src.data import FEATURES, load_dataset
@@ -30,16 +29,33 @@ def save_json(path, value):
                           encoding="utf-8")
 
 
+def package_versions(names):
+    """Record optional dependencies without requiring every model runtime."""
+    versions = {}
+    for name in names:
+        try:
+            versions[name] = importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            versions[name] = None
+    return versions
+
+
 def run(config, output, models):
     """Run a reproducible validation experiment / 执行可追溯的验证集实验。"""
     seed = config["seed"]
     random.seed(seed)
     np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.set_num_threads(4)
-    torch.use_deterministic_algorithms(True)
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
+    torch = None
+    if "patchtst" in models:
+        try:
+            import torch
+        except ModuleNotFoundError as exc:
+            raise RuntimeError("PatchTST requires torch; run LightGBM alone or install torch") from exc
+        torch.manual_seed(seed)
+        torch.set_num_threads(4)
+        torch.use_deterministic_algorithms(True)
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
     dataset = load_dataset(config, ROOT)
     output.mkdir(parents=True, exist_ok=False)
     save_json(output / "config.json", config)
@@ -58,10 +74,10 @@ def run(config, output, models):
         "source_sha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
                           for p in [ROOT / "main.py", *sorted((ROOT / "src").rglob("*.py")),
                                     *sorted((ROOT / "scripts").rglob("*.py"))]},
-        "packages": {p: importlib.metadata.version(p) for p in
-                     ("torch", "numpy", "pandas", "scikit-learn", "matplotlib", "xgboost")},
-        "cuda_build": torch.version.cuda,
-        "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+        "packages": package_versions(
+            ("torch", "numpy", "pandas", "scikit-learn", "matplotlib", "xgboost", "lightgbm")),
+        "cuda_build": torch.version.cuda if torch is not None else None,
+        "gpu": torch.cuda.get_device_name(0) if torch is not None and torch.cuda.is_available() else None,
         "test_evaluated": False, "holdout_evaluated": False,
     }
     save_json(output / "manifest.json", manifest)
@@ -75,6 +91,13 @@ def run(config, output, models):
             # Persist only the selected tree prefix / 保存最佳树前缀，避免重载时使用过拟合尾部。
             model.get_booster()[:model.best_iteration + 1].save_model(output / "xgboost.ubj")
             print("XGBoost finished", flush=True)
+        if "lightgbm" in models:
+            from src.models.lightgbm import fit_predict
+            model, predictions["lightgbm"], training["lightgbm"] = fit_predict(
+                dataset, config["lightgbm"], seed)
+            model.booster_.save_model(str(output / "lightgbm.txt"),
+                                      num_iteration=training["lightgbm"]["best_iteration"])
+            print("LightGBM finished", flush=True)
         if "patchtst" in models:
             from src.models.patchtst import fit_predict
             model, predictions["patchtst"], training["patchtst"] = fit_predict(
@@ -120,7 +143,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=ROOT / "configs/aapl.json",
                         help="JSON configuration (default: configs/aapl.json)")
-    parser.add_argument("--models", nargs="+", choices=["baselines", "xgboost", "patchtst"],
+    parser.add_argument("--models", nargs="+", choices=["baselines", "xgboost", "lightgbm", "patchtst"],
                         default=["xgboost", "patchtst"],
                         help="Models to train; baselines are always included")
     parser.add_argument("--run-name", default=datetime.now(timezone.utc).strftime("validation_%Y%m%dT%H%M%S_%fZ"),
