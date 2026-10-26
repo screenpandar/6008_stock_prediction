@@ -159,7 +159,9 @@ def run(config, output, models):
 
 def main():
     """CLI entry, never reads test labels / 命令行入口不构造测试期标签。"""
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        epilog="Frozen-model final test (no training): python main.py test --help")
     parser.add_argument("--config", type=Path, default=ROOT / "configs/aapl.json",
                         help="JSON configuration (default: configs/aapl.json)")
     parser.add_argument("--nasdaq-features", choices=["all", "return_volume"],

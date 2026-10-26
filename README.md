@@ -1,19 +1,16 @@
 # EE6008：单股票下一交易日收益预测
 
-本项目用个股和 Nasdaq 市场历史信息，预测下一交易日的收盘收益率，并辅助评价涨跌方向。目前已有 AAPL 和 TSLA 实验。小组实验约定、成员待办和需要同步的信息见 [PROJECT_PLAN.md](PROJECT_PLAN.md)。
+本项目用个股和 Nasdaq 市场历史信息，预测下一交易日的收盘收益率，并辅助评价涨跌方向。目前已有 AAPL 和 TSLA 实验。
 
-GitHub 分支开发、提交、PR 审查和冲突处理步骤见 [小组协作指南](cooperation.md)。
+## 1. 工作内容
 
-## 1. 当前已经完成什么
-
-- 从原始 CSV 构造共同数据集，支持每天 8 或 6 个特征、最近 60 个交易日作为输入；本轮组员调参统一使用 8 特征。
+- 从原始 CSV 构造共同数据集，支持每天 8 或 6 个特征、最近 60 个交易日作为输入；默认以8特征为主。
 - 实现 XGBoost、LightGBM、PatchTST、LSTM、GRU 单目标适配模型，以及零收益、训练期平均收益、延续前一日收益三种基线。
-- 完成首轮训练和验证；按日期保存预测、指标、配置、训练记录、预处理参数和模型权重。
-- 核心代码使用 `.py`，Notebook 调用相同模块探索数据和展示结果。
-- 统一启动命令是 `python main.py`。当前入口完成训练和验证，可将选定模型写入同一结果表，尚未实现最终测试入口或跨实验结果自动汇总。
-- LSTM 和 GRU 已按组员提供的模型和参数接入，使用共同数据处理、评价和结果输出。
+- 完成首轮及一轮超参数调优后的五模型验证；按日期保存预测、指标、配置、训练记录、预处理参数和模型权重。
+- 核心代码使用 `.py`，Notebook 仅用于展示结果。
+- `python main.py` 执行训练和验证；`python main.py test` 加载已保存的五个模型执行最终测试，不重新训练。另有 Notebook 比较指定的调优前后验证实验。
 
-训练期为 2010—2021 年，验证期为 2022—2023 年；2024—2025 年最终测试期及 2026 年额外保留期尚未评价。验证结果用于选择模型，不作为最终测试成绩。
+训练期为 2010—2021 年，验证期为 2022—2023 年；2024—2025 年进行最终测试
 
 ## 2. 配置环境
 
@@ -50,9 +47,8 @@ python -m pip install torch==2.14.0 --index-url https://download.pytorch.org/whl
 python -m pip install torch==2.14.0 --index-url https://download.pytorch.org/whl/cpu
 ```
 
-本项目已经在 Windows、RTX 5070 Ti Laptop GPU、PyTorch 2.14.0+cu132 上运行过。CPU 与 CUDA 13.2 安装包可在 [CPU 官方索引](https://download.pytorch.org/whl/cpu/torch/) 和 [CUDA 13.2 官方索引](https://download.pytorch.org/whl/cu132/torch/) 查询。其他硬件或操作系统请按 [PyTorch 官方安装说明](https://pytorch.org/get-started/locally/) 选择对应构建，并记录差异；不能只根据本机 CUDA Toolkit 版本判断 GPU 能否运行。
+本项目已经在 Windows、RTX 5070 Ti Laptop GPU、PyTorch 2.14.0+cu132 上运行过。CPU 与 CUDA 13.2 安装包可在 [CPU 官方索引](https://download.pytorch.org/whl/cpu/torch/) 和 [CUDA 13.2 官方索引](https://download.pytorch.org/whl/cu132/torch/) 查询。其他硬件或操作系统请按 [PyTorch 官方安装说明](https://pytorch.org/get-started/locally/) 选择对应构建。
 
-项目只使用 `torch`，不需要 `torchvision` 或 `torchaudio`。
 
 ### 2.3 安装其余依赖
 
@@ -87,7 +83,7 @@ stock_prediction/
     └── AAPL_Apple_stock_data.csv
 ```
 
-默认配置读取 AAPL 原始 CSV；`configs/tsla.json` 读取 `data/TSLA_Tesla_stock_data.csv`。两者都包含个股和 Nasdaq 行情，代码重新计算特征；无需把 `with_features.csv` 或 `standardized.csv` 作为训练输入。
+默认配置读取 AAPL 原始 CSV；`configs/tsla.json` 读取 `data/TSLA_Tesla_stock_data.csv`。两者都包含个股和 Nasdaq 行情，代码重新计算特征；
 
 检查文件是否存在，并打印文件指纹：
 
@@ -119,7 +115,7 @@ conda activate EE6008
 python -m unittest discover -s tests -v
 ```
 
-检查集中在 `tests/test_models.py`，验证数据对齐、标准化、指标及模型接口等。代码检查不等于模型预测效果评价，也不会使用最终测试集。
+检查集中在 `tests/test_models.py`，验证数据对齐、标准化、指标及模型接口等。
 
 ### 4.2 修改 JSON 配置
 
@@ -139,7 +135,7 @@ python -m unittest discover -s tests -v
 | `ticker` / `data_path` | 股票名称 / 原始 CSV 的项目相对路径；两者应对应。换股票优先用 `--config` 选择对应文件，不能只改股票名称 |
 | `nasdaq_features` | `"all"` 为 8 特征，`"return_volume"` 为 6 特征，具体见下表 |
 | `start` / `train_end` / `validation_end` | 数据起始日、训练结束日、验证结束日；按预测目标日期划分。本轮调参保持原设置 |
-| `test_end` / `holdout_end` | 最终测试期及额外保留期的约定日期；当前入口不会因此执行测试评价 |
+| `test_end` / `holdout_end` | 最终测试期及额外保留期的约定日期；普通训练命令不评价测试集，`main.py test` 使用源实验快照中的测试边界 |
 | `window` | 历史输入交易日数，目前为 60；本轮调参保持一致 |
 | `seed` | 随机种子，目前为 42；本轮比较保持一致，多种子实验另行约定 |
 
@@ -152,7 +148,7 @@ python -m unittest discover -s tests -v
 
 `nasdaq_vol_change = nasdaq_volume[t] / nasdaq_volume[t-1] - 1`，是成交量变化率。两种配置使用同一原始 CSV，无需手动删列；标准化仍由代码根据训练数据完成。
 
-**模型参数项：只编辑自己负责的模型段，保留其他段落。**
+**模型参数项：**
 
 | JSON 段落 | 常用可调参数及含义 |
 |---|---|
@@ -166,11 +162,11 @@ python -m unittest discover -s tests -v
 
 参数需满足实现约束：PatchTST 要求 `d_model` 能被 `n_heads` 整除，`0 < stride <= patch_len <= window`，且 `(window - patch_len)` 能被 `stride` 整除；GRU 若设 `num_layers=1`，需同时设 `dropout=0`。
 
-例如负责 XGBoost 的成员，可以把 `xgboost.max_depth` 从 3 改为 2，保存后运行一次；下一次修改参数后使用新的结果目录名。**本轮保持数据、8 特征、日期、60 日窗口及种子一致，只调整模型参数**。先保留一轮原参数结果作为基准，再按计划逐次修改并记录，以验证集 RMSE 为主、MAE 和方向表现为辅选择配置；最终测试集继续封存。
+
 
 ### 4.3 运行实验与命令行参数
 
-JSON 保存后即可运行，不必把 JSON 中的设置重复写到命令行。以 AAPL 的单模型调参为例，按自己负责的模型选择一条命令：
+JSON 保存后即可运行，不必把 JSON 中的设置重复写到命令行。以 AAPL 的单模型调参为例，按单模型模型选择一条命令：
 
 ```bash
 python main.py --config configs/aapl.json --models xgboost --run-name aapl_xgboost_tune_01
@@ -200,13 +196,10 @@ python main.py --config configs/tsla.json --models xgboost --run-name tsla_xgboo
 python main.py --config configs/aapl.json --models xgboost --nasdaq-features all --run-name aapl_xgboost_tune_02
 ```
 
-模型超参数、窗口和种子均在 JSON 中修改；当前入口没有 `--learning-rate`、`--window` 或 `--seed` 等选项。`python main.py` 会按当前 AAPL 配置运行全部五个模型；成员只调自己的模型时，请明确填写 `--models`。
-
-每次运行执行训练与验证，将实际配置、预测、指标和权重保存到 `artifacts/<run-name>/`。终端应正常退出，并且结果中的 `manifest.json` 应显示 `status=complete`。后续修改源 JSON 不会改变已保存的实验；查看历史结果应以该目录的 `config.json` 为准。
 
 ### 4.4 查看结果：先看这三项
 
-更新代码后，Notebook 建议先重启内核，再运行全部单元格。出现 `Dataset has no attribute 'features'` 时，通常是内核缓存了旧版数据模块，并不意味着旧实验缺少结果。展示代码会在重建数据集前重新加载本项目的 `src.data`；旧配置未含 `nasdaq_features` 时仍按八特征读取。若提示模块来自另一个项目目录，需重启内核并从当前项目重新运行。
+更新代码后，Notebook 建议先重启内核，再运行全部单元格。
 
 | 文件 | 先关注什么 |
 |---|---|
@@ -229,11 +222,11 @@ python main.py --config configs/aapl.json --models xgboost --nasdaq-features all
 | `training.json` | 训练耗时、设备、最佳轮次和学习曲线 |
 | `xgboost.ubj` / `lightgbm.txt` / `patchtst.pt` / `lstm.pt` / `gru.pt` | 本次训练模型的最佳权重，需配合预处理参数使用；只生成所选模型文件 |
 
-`r2` 相对验证集真实均值计算，`r2_vs_zero = 1-SSE/sum(y²)` 相对零收益预测计算，不能混称。小组比较时保留简单基线作为参照。
+`r2` 相对验证集真实均值计算，`r2_vs_zero = 1-SSE/sum(y²)` 相对零收益预测计算。
 
 ### 4.5 使用 Notebook 展示
 
-单次实验可用 `notebooks/01_AAPL_explore_and_results.ipynb` 或 `notebooks/01_TSLA_explore_and_results.ipynb` 展示。两者使用相同的通用读取规则，文件名仅用于整理，不限制所展示的股票。单模型调参请设置 `REQUIRE_ALL_MODELS = False`。
+单次实验可用 `notebooks/01_AAPL_explore_and_results.ipynb` 或 `notebooks/01_TSLA_explore_and_results.ipynb` 展示。两者使用相同的通用读取规则。单模型调参请设置 `REQUIRE_ALL_MODELS = False`。
 
 在开头**必须填写**实验目录名，例如：
 
@@ -242,24 +235,80 @@ RUN_NAME = "aapl_xgboost_tune_01"
 REQUIRE_ALL_MODELS = False
 ```
 
-展示另一轮实验时，只需将 `RUN_NAME` 改为 `artifacts/` 下实际存在的目录名称（例如 `"tsla_xgboost_tune_01"`），再从头运行。不要填写完整路径、`None` 或空字符串。目录不存在或文件不完整时直接报错，不会自动选择其他实验。
+展示另一轮实验时，只需将 `RUN_NAME` 改为 `artifacts/` 下实际存在的目录名称（例如 `"tsla_xgboost_tune_01"`），再从头运行。
 
 - 股票名称由 `artifacts/<RUN_NAME>/config.json` 的 `ticker` 获取；数据路径、日期范围、窗口、随机种子和模型参数也来自这份快照。
-- Notebook 不读取 `configs/` 下当前的训练配置，不按目录名称猜测股票，也不扫描最新实验。加载后会显示实际股票、实验目录和数据路径，图表标题及图例随之更新。
 - `REQUIRE_ALL_MODELS = True` 要求所选实验包含五种模型；查看单模型或部分模型实验时设为 `False`。
-- 读取 `predictions.csv`、`metrics.json`、`training.json`、`manifest.json`、`preprocessing.json` 和 `direction_reference.json`，核对原始数据指纹、日期、真实收益及指标。只展示已完成的验证实验，不重新训练。
+- 读取 `predictions.csv`、`metrics.json`、`training.json`、`manifest.json`、`preprocessing.json` 和 `direction_reference.json`，核对原始数据指纹、日期、真实收益及指标。
 - 依次展示数据和模型参数、误差与方向指标、对比图、预测曲线、累计平方误差、学习曲线、耗时及混淆矩阵；结论来自所选实验的实际数值。
 - `RECENT_DAYS` 只控制局部图展示的验证日数，不影响历史输入窗口或全期指标。`SHOW_TREE_IMPORTANCE = True` 可额外读取已有树模型权重。
-- 选择 EE6008 内核后从头运行。修改 `RUN_NAME` 文字不会自动更新旧图表；如一直转圈，可先单独执行 `print("kernel ready")` 检查内核是否响应。
+- 选择 EE6008 内核后从头运行。如一直转圈，可先单独执行 `print("kernel ready")` 检查内核是否响应。
 - 原始 CSV 必须仍位于快照指定的位置，且与训练时数据指纹一致。新增股票只要遵循现有公共数据格式和实验输出约定，就能复用任一本 Notebook；改变特征定义或预测任务仍需同步公共代码。
 
 现有参考配置下，AAPL 为 2,960 条训练样本、501 条验证样本；TSLA 为 2,838 条训练样本、501 条验证样本。实际数量应以所选实验记录为准。
 
-### 4.6 向小组提交
+**比较超参数调优前后：** 打开 `notebooks/hyperparameter_tuning_comparison.ipynb`，选择 EE6008 内核并从头运行。默认同时比较 AAPL、TSLA 的五模型结果：
 
-提交模型代码、所用配置和一个 `status=complete` 的完整实验结果目录，并简要说明实验目的、改动和结论。不要只提交截图或一个准确率数字。具体输出约定见 [项目规划](PROJECT_PLAN.md)。
+```python
+RUN_PAIRS = [
+    ("aapl_compare_all_01", "aapl_compare_all_02"),
+    ("tsla_compare_all_01", "tsla_compare_all_02"),
+]
+```
 
-`data/` 中的六份 CSV 随仓库共享；每次训练读取所选配置指定的原始 CSV，其余文件供核对和后续实验使用。`artifacts/`、模型权重、课程文档和 `private/` 已被 Git 忽略，选定的实验结果包需要通过小组约定的位置单独共享。
+每一对按“调优前、调优后”填写 `artifacts/` 下的目录名。股票名称来自各自 `config.json`；切换实验或增加股票只需修改 `RUN_PAIRS`，然后重启内核并运行全部单元格。
+
+该 Notebook 只读取保存的配置、预处理、运行记录、指标和逐日预测，不加载模型权重、不重建原始数据集、不训练模型。它会核对同一股票前后的数据指纹、公共配置、预处理参数、日期、标签和基线，并重算指标核对保存结果；随后展示模型参数改动、MAE/RMSE/R²、方向准确率/F1、预测上涨比例、变化图、基线排名及自动小结。代码或环境指纹变化会明确列出，避免把全部差异归因于超参数。所有比较仍属于验证集结果。
+
+### 4.6 最终测试：直接使用之前实验中已保存的五个模型
+
+在项目根目录、EE6008 环境中运行（已有完整结果时直接查看，不必重复执行；输出目录不能重名）：
+
+```bash
+python main.py test --source-run aapl_compare_all_02 --run-name aapl_final_test_02
+python main.py test --source-run tsla_compare_all_02 --run-name tsla_final_test_02
+```
+
+每条命令会执行以下流程：
+
+1. 从 `--source-run` 指定目录读取 `config.json`、`preprocessing.json`、`training.json`、`manifest.json`、`direction_reference.json`、验证预测及五份模型权重。不会读取 `configs/` 当前配置。
+2. 核对原始 CSV 指纹，恢复最佳树前缀与神经网络权重，先重现已有验证预测。若日期、标签、输入形状或预测不匹配则停止，不进行测试。
+3. 仅评价 `validation_end < target_date <= test_end`，目前为 2024—2025 年；每天用预测日之前已经观测到的最近 60 个交易日预测下一交易日，窗口可以包含较早的测试期行情，但模型与缩放参数始终固定。
+4. 对五个模型及三个简单基线计算测试指标。历史平均收益及多数方向仍来自原训练期。
+
+可选参数：`--device cpu` 强制神经网络在 CPU 推理，`--device cuda` 强制 GPU，默认 `auto`；树模型使用 CPU。`--batch-size 128` 只改变推理批大小，不修改原训练参数。没有 `--config`、`--models` 或超参数覆盖选项，始终恢复源实验的全部五个模型。
+如只检查能否恢复模型，暂不执行测试：
+
+```bash
+python main.py test --source-run aapl_compare_all_02 --check-only
+python main.py test --source-run tsla_compare_all_02 --check-only
+```
+当前调优后模型的测试输出位于 `artifacts/aapl_final_test_02/` 和 `artifacts/tsla_final_test_02/`；现有 `final_test_01` 来自调优前的 `compare_all_01`。模型来源以 `manifest.json` 的 `source_run` 为准。
+
+| 文件 | 用途 |
+|---|---|
+| `metrics.csv` / `metrics.json` | 五个模型和三个基线的测试指标 |
+| `predictions.csv` | 测试目标日、真实收益、方向和模型预测 |
+| `test_comparison.png` | 明确标注 Test 的误差及方向对比图 |
+| `manifest.json` | 应为 `status=complete`、`evaluation_split=test`、`retrained=false`、`test_evaluated=true`、`holdout_evaluated=false`；记录源实验及文件指纹 |
+| `config.json` / `preprocessing.json` | 沿用源实验的配置与训练期缩放参数 |
+| `source_manifest.json` / `validation_replay.json` | 原实验记录，以及恢复模型后对已有验证预测的一致性检查 |
+| `data_audit.json` / `inference.json` | 实际测试日期、有效样本数、跳过样本及推理设备、耗时 |
+| `direction_reference.json` | 原训练期多数方向在测试集上的准确率 |
+
+测试入口不输出新的训练记录或模型权重。**探索与调参对比 Notebook 只接受验证结果，不能直接把 `RUN_NAME` 换成测试目录。** 最终测试使用下面专用的 Notebook。
+
+**汇总两只股票的最终测试：** 打开 `notebooks/01_final_test_results.ipynb`，开头显式指定两个目录。实验流程、指标解释与结果分析见 [EXPERIMENT_SUMMARY.md](EXPERIMENT_SUMMARY.md)。
+
+```python
+RUN_NAMES = ["aapl_final_test_02", "tsla_final_test_02"]
+```
+
+选择 EE6008 内核，重启并运行全部单元格；切换股票或结果只需修改 `RUN_NAMES`。只接受两个不同股票的完整测试实验。
+页面展示实验来源、五模型总表、方向细节、并列指标图、各股票含简单基线的排名、局部预测曲线、混淆矩阵与自动小结。
+
+
+
 
 ## 5. 文件结构
 
@@ -276,20 +325,16 @@ stock_prediction/
 │   ├── data.py               # 共同的数据处理
 │   ├── baselines.py          # 简单预测基线
 │   ├── evaluate.py           # 共同的指标和绘图
+│   ├── inference.py          # 恢复五个已保存模型，仅推理
 │   └── models/               # XGBoost、LightGBM、PatchTST、LSTM、GRU
-├── scripts/run_experiment.py # 实验执行和结果保存逻辑
-├── notebooks/               # 01_AAPL / 01_TSLA：均按指定实验目录通用展示
+├── scripts/run_experiment.py # 训练与验证入口
+├── scripts/evaluate_test.py  # 冻结模型的最终测试入口
+├── notebooks/               # 验证展示、调参前后对比、双股票最终测试
 ├── tests/test_models.py      # 统一的数据、指标及模型检查
 ├── artifacts/                # 各次实验输出
 └── private/                  # 个人笔记，不提交 Git
 ```
 
-共享文档分工：README 说明运行方法，PROJECT_PLAN 记录共同约定，cooperation 说明 GitHub 协作步骤。新增个人分析放入 `private/`。
+共享文档分工：README 说明运行方法，PROJECT_PLAN 记录共同约定，cooperation 说明 GitHub 协作步骤。
 
-## 6. 当前实现的边界
 
-PatchTST 参考 [官方实现](https://github.com/yuqinie98/PatchTST) 的时间分块及通道共享编码思路，以 PyTorch 独立实现；当前使用 LayerNorm，不使用 RevIN、残差注意力或预训练，通过联合回归头输出单个目标股票次日收益。结果应标注为本项目适配版本。
-
-LSTM 使用组员提供的单向两层结构，以最后一个时间步的输出经过回归头预测次日收益；GRU 使用单向两层结构，以最后一层的最终隐藏状态经过线性回归头输出收益。共享 Notebook 可展示所有已接入模型的预测曲线。`lstm/`、`gru/` 是原始交付目录，保留用于追溯并已忽略 Git 提交；实际运行使用 `src/models/` 和 `configs/`。
-
-目前只完成固定时间划分、单随机种子的首轮比较；尚未完成滚动验证、多种子、最终测试或回测。数据复权与来源未核实，当前收益按 `close` 计算，不宣称为含分红总收益。跨硬件或软件版本的结果可能存在差异，应保留环境记录。

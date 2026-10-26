@@ -37,7 +37,7 @@ def comparison_table(metrics):
     return pd.DataFrame(metrics).T[columns].rename_axis("model")
 
 
-def plot_comparison(metrics):
+def plot_comparison(metrics, split="Validation"):
     """Return a figure for both CLI and notebook / 命令行和 Notebook 共用图表。"""
     import matplotlib.pyplot as plt
     table = comparison_table(metrics)
@@ -45,10 +45,10 @@ def plot_comparison(metrics):
     names = [n.replace("_", "\n") for n in table.index]
     axes[0].bar(names, table.rmse.astype(float) * 100)
     axes[0].set_ylabel("Daily return RMSE (percentage points)")
-    axes[0].set_title("Validation error (lower is better)")
+    axes[0].set_title(f"{split} error (lower is better)")
     axes[1].bar(names, table.direction_accuracy.astype(float) * 100)
     axes[1].set_ylabel("Direction accuracy (%)")
-    axes[1].set_title("Validation direction (threshold = 0)")
+    axes[1].set_title(f"{split} direction (threshold = 0)")
     axes[1].set_ylim(0, 100)
     for ax in axes:
         ax.grid(axis="y", alpha=0.25)

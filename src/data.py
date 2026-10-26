@@ -62,22 +62,12 @@ def make_features(raw):
     return result.replace([np.inf, -np.inf], np.nan)
 
 
-def build_dataset(raw, config):
-    """Build train/validation only; future rows excluded first.
-
-    先截断到验证期，再构造特征；缺失日不删除，避免把间隔两日误当成次日。
-    """
-    features = selected_features(config)
-    window = config["window"]
-    if not isinstance(window, int) or window < 1:
-        raise ValueError("window must be a positive integer")
-    start, train_end, val_end = map(pd.Timestamp, (
-        config["start"], config["train_end"], config["validation_end"]))
-    if not start < train_end < val_end:
-        raise ValueError("Require start < train_end < validation_end")
+def _prepare_raw(raw, config, cutoff):
+    """Exclude later rows before validating prices or constructing features."""
+    start = pd.Timestamp(config["start"])
     raw = raw.copy()
     raw["date"] = pd.to_datetime(raw["date"], errors="raise")
-    raw = raw.loc[raw.date.between(start, val_end)].reset_index(drop=True)
+    raw = raw.loc[raw.date.between(start, cutoff)].reset_index(drop=True)
     if raw.empty or raw.date.duplicated().any() or not raw.date.is_monotonic_increasing:
         raise ValueError("Selected dates must be nonempty, unique and increasing")
     required = [p + c for p in ("", "nasdaq_")
@@ -95,6 +85,23 @@ def build_dataset(raw, config):
                 | (raw[p + "close"] > high + 1e-8)
                 | (raw[p + "close"] < low - 1e-8)).any():
             raise ValueError(f"Inconsistent OHLC for {p or 'stock'}")
+    return raw
+
+
+def build_dataset(raw, config):
+    """Build train/validation only; future rows excluded first.
+
+    先截断到验证期，再构造特征；缺失日不删除，避免把间隔两日误当成次日。
+    """
+    features = selected_features(config)
+    window = config["window"]
+    if not isinstance(window, int) or window < 1:
+        raise ValueError("window must be a positive integer")
+    start, train_end, val_end = map(pd.Timestamp, (
+        config["start"], config["train_end"], config["validation_end"]))
+    if not start < train_end < val_end:
+        raise ValueError("Require start < train_end < validation_end")
+    raw = _prepare_raw(raw, config, val_end)
     frame = make_features(raw)
     # Keep the full-feature eligibility rule for a controlled ablation: removing
     # a channel must not silently introduce extra dates with missing market data.
@@ -165,3 +172,67 @@ def build_dataset(raw, config):
 def load_dataset(config, root):
     """Read project-relative CSV / 相对于项目根目录读取数据。"""
     return build_dataset(pd.read_csv(Path(root) / config["data_path"]), config)
+
+
+def build_evaluation_samples(raw, config, split="test"):
+    """Build frozen-model inputs, never fit a scaler or choose a checkpoint.
+
+    Test targets satisfy validation_end < target_date <= test_end. Earlier
+    observed prices, including earlier test days, may be historical inputs for
+    the next trading day's forecast. This is rolling one-step evaluation.
+    """
+    if split not in ("validation", "test"):
+        raise ValueError("split must be validation or test; holdout is not supported")
+    start, train_end, val_end = map(pd.Timestamp, (
+        config["start"], config["train_end"], config["validation_end"]))
+    if not start < train_end < val_end:
+        raise ValueError("Require start < train_end < validation_end")
+    lower, upper = train_end, val_end
+    if split == "test":
+        upper = pd.Timestamp(config["test_end"])
+        if not val_end < upper < pd.Timestamp(config["holdout_end"]):
+            raise ValueError("Require validation_end < test_end < holdout_end")
+        lower = val_end
+    window = config["window"]
+    if not isinstance(window, int) or isinstance(window, bool) or window < 1:
+        raise ValueError("window must be a positive integer")
+    raw = _prepare_raw(raw, config, upper)
+    features = selected_features(config)
+    frame = make_features(raw)
+    valid = np.isfinite(frame[FEATURES].to_numpy(dtype=np.float64)).all(axis=1)
+    values = frame[features].to_numpy(dtype=np.float64)
+    labels = (raw.close.shift(-1) / raw.close - 1).to_numpy()
+    indices, windows, targets = [], [], []
+    skipped, eligible = 0, int(((raw.date > lower) & (raw.date <= upper)).sum())
+    for i in range(len(raw) - 1):
+        if not lower < raw.date.iloc[i + 1] <= upper:
+            continue
+        if (i < window - 1 or not valid[i - window + 1:i + 1].all()
+                or not np.isfinite(labels[i])):
+            skipped += 1
+            continue
+        indices.append(i)
+        windows.append(values[i - window + 1:i + 1].copy())
+        targets.append(labels[i])
+    if not indices:
+        raise ValueError(f"No usable {split} samples; inspect dates/window/missing data")
+    indices = np.asarray(indices)
+    samples = Samples(
+        X=np.stack(windows), y=np.asarray(targets),
+        dates=pd.DataFrame({
+            "window_start": raw.date.iloc[indices - window + 1].to_numpy(),
+            "signal_date": raw.date.iloc[indices].to_numpy(),
+            "target_date": raw.date.iloc[indices + 1].to_numpy(),
+        }), last_return=values[indices, 0].copy())
+    audit = {
+        "evaluation_split": split, "split_by": "target_date",
+        "read_cutoff": str(upper.date()), "target_after": str(lower.date()),
+        "target_through": str(upper.date()), "features": features, "window": window,
+        "sample_eligibility": "all_eight_features_finite",
+        "raw_target_rows": eligible, "samples": len(samples.y),
+        "skipped_invalid_windows": skipped,
+        "target_first": str(samples.dates.target_date.min().date()),
+        "target_last": str(samples.dates.target_date.max().date()),
+        "preprocessing_fitted": False, "holdout_evaluated": False,
+    }
+    return samples, audit

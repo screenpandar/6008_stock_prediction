@@ -7,13 +7,14 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
 import torch
 from lightgbm import Booster
 
-from src.data import FEATURES, build_dataset, make_features
+from src.data import FEATURES, build_dataset, build_evaluation_samples, make_features
 from src.evaluate import evaluate
 from src.models.lightgbm import fit_predict
 from src.models.patchtst import PatchTSTRegressor
@@ -171,6 +172,154 @@ class MetricTests(unittest.TestCase):
     def test_missing_prediction_rejected(self):
         with self.assertRaises(ValueError):
             evaluate(np.ones(3), np.array([0, 1, np.nan]))
+
+
+class FrozenTestTests(unittest.TestCase):
+    """Synthetic data only; never evaluate the project's real test periods."""
+
+    def setUp(self):
+        self.raw, self.config = fixture()
+        self.config.update(test_end=str(self.raw.date.iloc[22].date()),
+                           holdout_end=str(self.raw.date.iloc[23].date()))
+
+    def test_test_dates_context_and_next_day_labels(self):
+        samples, audit = build_evaluation_samples(self.raw, self.config)
+        np.testing.assert_array_equal(samples.dates.target_date, self.raw.date.iloc[21:23])
+        self.assertEqual(samples.dates.signal_date.iloc[0], self.raw.date.iloc[20])
+        self.assertEqual(samples.dates.window_start.iloc[0], self.raw.date.iloc[18])
+        np.testing.assert_allclose(samples.y,
+                                   self.raw.close.iloc[21:23].to_numpy() / self.raw.close.iloc[20:22].to_numpy() - 1)
+        self.assertFalse(audit["preprocessing_fitted"])
+        self.assertFalse(audit["holdout_evaluated"])
+
+    def test_holdout_prices_excluded_and_future_cannot_change_earlier_input(self):
+        expected, _ = build_evaluation_samples(self.raw, self.config)
+        changed = self.raw.copy()
+        changed.loc[23, "close"] = -999
+        actual, _ = build_evaluation_samples(changed, self.config)
+        np.testing.assert_array_equal(expected.X, actual.X)
+        np.testing.assert_array_equal(expected.y, actual.y)
+        changed.loc[22, changed.columns != "date"] *= 2
+        actual, _ = build_evaluation_samples(changed, self.config)
+        np.testing.assert_array_equal(expected.X[0], actual.X[0])
+        self.assertEqual(expected.y[0], actual.y[0])
+
+    def test_validation_replay_uses_identical_historical_windows(self):
+        for mode in ("all", "return_volume"):
+            config = {**self.config, "nasdaq_features": mode}
+            trained = build_dataset(self.raw, config)
+            replay, _ = build_evaluation_samples(self.raw, config, "validation")
+            np.testing.assert_array_equal(trained.validation.X, replay.X)
+            np.testing.assert_array_equal(trained.validation.y, replay.y)
+            pd.testing.assert_frame_equal(trained.validation.dates, replay.dates)
+
+    def test_test_missing_values_do_not_bridge_days(self):
+        raw = self.raw.copy()
+        raw.loc[21, "close"] = np.nan
+        with self.assertRaisesRegex(ValueError, "No usable test"):
+            build_evaluation_samples(raw, self.config)
+
+    def test_invalid_test_boundaries_and_holdout_rejected(self):
+        with self.assertRaisesRegex(ValueError, "test_end"):
+            build_evaluation_samples(self.raw, {**self.config, "test_end": self.config["validation_end"]})
+        with self.assertRaisesRegex(ValueError, "holdout"):
+            build_evaluation_samples(self.raw, self.config, "holdout")
+
+    def test_frozen_predict_applies_saved_scales_and_disables_dropout(self):
+        from src.inference import FrozenModels
+        instance = FrozenModels.__new__(FrozenModels)
+        instance.window, instance.channels, instance.device = 3, 8, "cpu"
+        instance.preprocessing = {"feature_mean": [1.] * 8, "feature_scale": [2.] * 8,
+                                  "target_mean": .01, "target_scale": .1}
+        model = GRURegressor(window=3, channels=8, hidden_size=4, num_layers=2, dropout=.5).eval()
+        instance.models = {"gru": model}
+        inputs = np.arange(5*3*8, dtype=float).reshape(5, 3, 8) / 100
+        expected_x = torch.from_numpy(((inputs-1)/2).astype(np.float32))
+        with torch.inference_mode():
+            expected = model(expected_x).numpy().astype(np.float64)*.1+.01
+        first, _ = instance.predict(inputs, batch_size=2)
+        second, _ = instance.predict(inputs, batch_size=3)
+        np.testing.assert_allclose(first["gru"], expected, rtol=1e-6, atol=1e-8)
+        np.testing.assert_allclose(second["gru"], expected, rtol=1e-6, atol=1e-8)
+
+    def test_synthetic_cli_output_and_check_only_do_not_train(self):
+        from scripts.evaluate_test import run_test, sha256, save_json
+        from src.inference import MODEL_FILES
+        raw, config = self.raw, dict(self.config, ticker="SYNTHETIC", seed=42, data_path="data.csv")
+        config.update({name: {} for name in MODEL_FILES})
+        dataset = build_dataset(raw, config)
+        preprocessing = {"features": dataset.features, "window": config["window"],
+                         "feature_mean": dataset.feature_mean.tolist(),
+                         "feature_scale": dataset.feature_scale.tolist(),
+                         "target_mean": dataset.target_mean, "target_scale": dataset.target_scale}
+
+        class DummyFrozenModels:
+            device = "cpu"
+
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def predict(self, X, batch_size):
+                return ({name: np.zeros(len(X)) for name in MODEL_FILES}, {})
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "main.py").write_text("# synthetic fixture", encoding="utf-8")
+            raw.to_csv(root / "data.csv", index=False)
+            folder = root / "artifacts" / "source"
+            folder.mkdir(parents=True)
+            source_data = {
+                "config": config, "preprocessing": preprocessing,
+                "training": {name: {} for name in MODEL_FILES},
+                "manifest": {"status": "complete", "evaluation_split": "validation", "seed": 42,
+                             "models_requested": list(MODEL_FILES), "data_sha256": sha256(root / "data.csv")},
+                "direction_reference": {"train_majority_up": True},
+            }
+            for key, value in source_data.items():
+                save_json(folder / f"{key}.json", value)
+            for file in MODEL_FILES.values():
+                (folder / file).write_bytes(b"synthetic checkpoint; loader is mocked")
+            predictions = dataset.validation.dates.copy()
+            predictions["actual_return"] = dataset.validation.y
+            predictions["actual_direction"] = (dataset.validation.y > 0).astype(int)
+            predictions["zero_return"] = 0.
+            predictions["historical_mean"] = dataset.target_mean
+            predictions["last_return"] = dataset.validation.last_return
+            for name in MODEL_FILES:
+                predictions[name] = 0.
+            predictions.to_csv(folder / "predictions.csv", index=False)
+            original_hashes = {file.name: sha256(file) for file in folder.iterdir()}
+            with patch("scripts.evaluate_test.FrozenModels", DummyFrozenModels):
+                # A check must return before constructing ANY test-period samples.
+                with patch("scripts.evaluate_test.build_evaluation_samples", wraps=build_evaluation_samples) as build:
+                    run_test("source", check_only=True, root=root)
+                    self.assertEqual(build.call_count, 1)
+                    self.assertEqual(build.call_args.kwargs["split"], "validation")
+                self.assertEqual([p.name for p in (root / "artifacts").iterdir()], ["source"])
+                result = run_test("source", "final_test", root=root)
+                manifest = json.loads((result / "manifest.json").read_text())
+                self.assertEqual(manifest["evaluation_split"], "test")
+                self.assertEqual(manifest["status"], "complete")
+                self.assertTrue(manifest["test_evaluated"])
+                self.assertFalse(manifest["retrained"])
+                self.assertFalse(manifest["preprocessing_fitted"])
+                self.assertFalse(manifest["holdout_evaluated"])
+                self.assertTrue((result / "test_comparison.png").is_file())
+                self.assertFalse((result / "training.json").exists())
+                actual = pd.read_csv(result / "predictions.csv")
+                self.assertEqual(len(actual), 2)
+                np.testing.assert_allclose(actual.historical_mean, dataset.target_mean)
+                with self.assertRaises(FileExistsError):
+                    run_test("source", "source", root=root)
+                with self.assertRaises(FileExistsError):
+                    run_test("source", "final_test", root=root)
+                with self.assertRaises(ValueError):
+                    run_test("../source", root=root)
+                self.assertEqual(original_hashes, {file.name: sha256(file) for file in folder.iterdir()})
+                (root / "data.csv").write_text("modified", encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "Raw data differs"):
+                    run_test("source", "mismatch", root=root)
+                self.assertFalse((root / "artifacts" / "mismatch").exists())
 
 
 class PatchTests(unittest.TestCase):
