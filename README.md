@@ -80,22 +80,28 @@ python -c "import torch; assert torch.cuda.is_available(), 'CUDA unavailable'; x
 ```text
 stock_prediction/
 └── data/
-    └── AAPL_Apple_stock_data.csv
+    ├── AAPL_Apple_stock_data.csv
+    └── TSLA_Tesla_stock_data.csv
 ```
 
-默认配置读取 AAPL 原始 CSV；`configs/tsla.json` 读取 `data/TSLA_Tesla_stock_data.csv`。两者都包含个股和 Nasdaq 行情，代码重新计算特征；
+默认配置读取 AAPL 原始 CSV；`configs/tsla.json` 读取 `data/TSLA_Tesla_stock_data.csv`。两者都包含个股和 Nasdaq 行情。`data/` 只保留这两份原始 CSV；未使用的 `with_features`、`standardized` 数据集和 `__MACOSX` 元数据目录已移除。特征由公共代码重新计算，标准化统计量仅在训练数据上拟合，无需另外准备预处理后的 CSV。
 
 检查文件是否存在，并打印文件指纹：
 
 ```bash
-python -c "from pathlib import Path; import hashlib; p=Path('data/AAPL_Apple_stock_data.csv'); print(p.exists()); print(hashlib.sha256(p.read_bytes()).hexdigest())"
+python -c "from pathlib import Path; import hashlib; files=['AAPL_Apple_stock_data.csv','TSLA_Tesla_stock_data.csv']; [print(name, hashlib.sha256((Path('data') / name).read_bytes()).hexdigest()) for name in files]"
 ```
 
 当前参考数据的 SHA-256 为：
 
 ```text
+AAPL_Apple_stock_data.csv
 5628d6886f2b3da80fd3ace8884ef90876c1a664a7eaa82ca90e5d952dff44cc
+TSLA_Tesla_stock_data.csv
+9d4198faa8a2c5d05ad8c754907062872d37f587f58d918c269dbf978874e545
 ```
+
+实验中的 `data_sha256` 只对 `data_path` 指定的 CSV 文件内容计算，不对整个目录计算。删除未使用的其他文件不会改变此指纹；保留这两份原始文件的相对路径和内容，即可继续核对现有实验。
 
 不同成员的指纹不一致时，先确认数据版本再比较结果。数据来源、Nasdaq 具体代码和价格复权口径仍待组员补充。
 
@@ -226,7 +232,9 @@ python main.py --config configs/aapl.json --models xgboost --nasdaq-features all
 
 ### 4.5 使用 Notebook 展示
 
-单次实验可用 `notebooks/01_AAPL_explore_and_results.ipynb` 或 `notebooks/01_TSLA_explore_and_results.ipynb` 展示。两者使用相同的通用读取规则。单模型调参请设置 `REQUIRE_ALL_MODELS = False`。
+`notebooks/results_display/` 存放单次实验和最终测试的结果展示；`notebooks/result_comparison/` 存放 Nasdaq 特征、超参数调优和最终测试调优前后的对比。Notebook 会从当前工作目录逐级向上定位项目根目录，因此在项目根目录或这两个子文件夹中运行均可；实验目录名仍只填写 `artifacts/` 下的名称，无需添加 `../`。
+
+单次实验可用 `notebooks/results_display/01_AAPL_original_5models.ipynb` 或 `notebooks/results_display/01_TSLA_original_5models.ipynb` 展示。两者使用相同的通用读取规则。单模型调参请设置 `REQUIRE_ALL_MODELS = False`。
 
 在开头**必须填写**实验目录名，例如：
 
@@ -240,14 +248,14 @@ REQUIRE_ALL_MODELS = False
 - 股票名称由 `artifacts/<RUN_NAME>/config.json` 的 `ticker` 获取；数据路径、日期范围、窗口、随机种子和模型参数也来自这份快照。
 - `REQUIRE_ALL_MODELS = True` 要求所选实验包含五种模型；查看单模型或部分模型实验时设为 `False`。
 - 读取 `predictions.csv`、`metrics.json`、`training.json`、`manifest.json`、`preprocessing.json` 和 `direction_reference.json`，核对原始数据指纹、日期、真实收益及指标。
-- 依次展示数据和模型参数、误差与方向指标、对比图、预测曲线、累计平方误差、学习曲线、耗时及混淆矩阵；结论来自所选实验的实际数值。
-- `RECENT_DAYS` 只控制局部图展示的验证日数，不影响历史输入窗口或全期指标。`SHOW_TREE_IMPORTANCE = True` 可额外读取已有树模型权重。
+- 依次展示实验目录校验与资源记录、按方向准确率降序排列的结果表格，以及模型预测曲线。
+- `RECENT_DAYS` 只控制右侧局部曲线的展示日数（默认 80），左侧展示完整验证期，不影响历史输入窗口或全期指标。
 - 选择 EE6008 内核后从头运行。如一直转圈，可先单独执行 `print("kernel ready")` 检查内核是否响应。
 - 原始 CSV 必须仍位于快照指定的位置，且与训练时数据指纹一致。新增股票只要遵循现有公共数据格式和实验输出约定，就能复用任一本 Notebook；改变特征定义或预测任务仍需同步公共代码。
 
 现有参考配置下，AAPL 为 2,960 条训练样本、501 条验证样本；TSLA 为 2,838 条训练样本、501 条验证样本。实际数量应以所选实验记录为准。
 
-**比较超参数调优前后：** 打开 `notebooks/hyperparameter_tuning_comparison.ipynb`，选择 EE6008 内核并从头运行。默认同时比较 AAPL、TSLA 的五模型结果：
+**比较超参数调优前后：** 打开 `notebooks/result_comparison/hyperparameter_tuning_comparison.ipynb`，选择 EE6008 内核并从头运行。默认同时比较 AAPL、TSLA 的五模型结果：
 
 ```python
 RUN_PAIRS = [
@@ -258,7 +266,7 @@ RUN_PAIRS = [
 
 每一对按“调优前、调优后”填写 `artifacts/` 下的目录名。股票名称来自各自 `config.json`；切换实验或增加股票只需修改 `RUN_PAIRS`，然后重启内核并运行全部单元格。
 
-该 Notebook 只读取保存的配置、预处理、运行记录、指标和逐日预测，不加载模型权重、不重建原始数据集、不训练模型。它会核对同一股票前后的数据指纹、公共配置、预处理参数、日期、标签和基线，并重算指标核对保存结果；随后展示模型参数改动、MAE/RMSE/R²、方向准确率/F1、预测上涨比例、变化图、基线排名及自动小结。代码或环境指纹变化会明确列出，避免把全部差异归因于超参数。所有比较仍属于验证集结果。
+该 Notebook 只读取保存的配置和指标，展示共用参数改动、调优前后的结果表格（含方向准确率改善率）及变化幅度柱状图，不重复校验数据指纹或重算指标。所有比较均为验证集结果。
 
 ### 4.6 最终测试：直接使用之前实验中已保存的五个模型
 
@@ -296,16 +304,18 @@ python main.py test --source-run tsla_compare_all_02 --check-only
 | `data_audit.json` / `inference.json` | 实际测试日期、有效样本数、跳过样本及推理设备、耗时 |
 | `direction_reference.json` | 原训练期多数方向在测试集上的准确率 |
 
-测试入口不输出新的训练记录或模型权重。**探索与调参对比 Notebook 只接受验证结果，不能直接把 `RUN_NAME` 换成测试目录。** 最终测试使用下面专用的 Notebook。
+测试入口不输出新的训练记录或模型权重。 最终测试使用下方专用的 Notebook。
 
-**汇总两只股票的最终测试：** 打开 `notebooks/01_final_test_results.ipynb`，开头显式指定两个目录。实验流程、指标解释与结果分析见 [EXPERIMENT_SUMMARY.md](EXPERIMENT_SUMMARY.md)。
+**汇总两只股票的最终测试：** 调优前使用 `notebooks/results_display/01_final_test_results.ipynb`，调优后打开 `notebooks/results_display/02_final_test_results.ipynb`，开头显式指定两个目录。实验流程、指标解释与结果分析见 [EXPERIMENT_SUMMARY.md](EXPERIMENT_SUMMARY.md)。
 
 ```python
 RUN_NAMES = ["aapl_final_test_02", "tsla_final_test_02"]
 ```
 
 选择 EE6008 内核，重启并运行全部单元格；切换股票或结果只需修改 `RUN_NAMES`。只接受两个不同股票的完整测试实验。
-页面展示实验来源、五模型总表、方向细节、并列指标图、各股票含简单基线的排名、局部预测曲线、混淆矩阵与自动小结。
+页面展示各股票按方向准确率降序排列的结果表格（含简单基线）和模型预测曲线。每只股票独立成图，左侧为完整测试期，右侧为最近 80 个交易日。
+
+**比较调优前后的最终测试：** 打开 `notebooks/result_comparison/final_test_tuning_comparison.ipynb`，手动设置 `RUN_PAIRS`，例如 `[("aapl_final_test_01", "aapl_final_test_02"), ("tsla_final_test_01", "tsla_final_test_02")]`。每一对依次为调优前、调优后的测试目录；只展示结果表格和变化幅度柱状图。表格中的方向准确率改善率为 `(调优后 − 调优前) / 调优前 × 100%`，柱状图中的方向准确率变化为百分点。
 
 
 
@@ -320,7 +330,7 @@ stock_prediction/
 ├── cooperation.md            # GitHub 分支与 PR 协作步骤
 ├── requirement.txt           # Python 直接依赖版本
 ├── configs/                 # aapl.json、tsla.json：股票数据及五模型参数
-├── data/                     # 六份共享 CSV，直接放在该目录
+├── data/                     # 两份原始 CSV：AAPL、TSLA 的 stock_data
 ├── src/
 │   ├── data.py               # 共同的数据处理
 │   ├── baselines.py          # 简单预测基线
@@ -329,12 +339,13 @@ stock_prediction/
 │   └── models/               # XGBoost、LightGBM、PatchTST、LSTM、GRU
 ├── scripts/run_experiment.py # 训练与验证入口
 ├── scripts/evaluate_test.py  # 冻结模型的最终测试入口
-├── notebooks/               # 验证展示、调参前后对比、双股票最终测试
+├── notebooks/
+│   ├── results_display/     # 单次验证实验、双股票最终测试展示（8 个）
+│   └── result_comparison/   # 特征、验证调参、最终测试调参对比（3 个）
 ├── tests/test_models.py      # 统一的数据、指标及模型检查
 ├── artifacts/                # 各次实验输出
 └── private/                  # 个人笔记，不提交 Git
 ```
 
-共享文档分工：README 说明运行方法，PROJECT_PLAN 记录共同约定，cooperation 说明 GitHub 协作步骤。
 
 
