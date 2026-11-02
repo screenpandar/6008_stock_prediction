@@ -1,81 +1,83 @@
-# EE6008：单股票下一交易日收益预测
+# EE6008: Single-Stock Next-Trading-Day Return Prediction
 
-本项目用个股和 Nasdaq 市场历史信息，预测下一交易日的收盘收益率，并辅助评价涨跌方向。目前已有 AAPL 和 TSLA 实验。
+[中文版 README](README_CN.md)
 
-## 1. 工作内容
+This project uses historical information about individual stocks and the Nasdaq market to predict the next trading day's closing return, with supplementary evaluation of price direction. Experiments are currently available for AAPL and TSLA.
 
-- 从原始 CSV 构造共同数据集，支持每天 8 或 6 个特征、最近 60 个交易日作为输入；默认以8特征为主。
-- 实现 XGBoost、LightGBM、PatchTST、LSTM、GRU 单目标适配模型，以及零收益、训练期平均收益、延续前一日收益三种基线。
-- 完成首轮及一轮超参数调优后的五模型验证；按日期保存预测、指标、配置、训练记录、预处理参数和模型权重。
-- 核心代码使用 `.py`，Notebook 仅用于展示结果。
-- `python main.py` 执行训练和验证；`python main.py test` 加载已保存的五个模型执行最终测试，不重新训练。另有 Notebook 比较指定的调优前后验证实验。
+## 1. Project Work
 
-训练期为 2010—2021 年，验证期为 2022—2023 年；2024—2025 年进行最终测试
+- Build a shared dataset from raw CSV files, using the most recent 60 trading days with either 8 or 6 features per day; 8 features are the default.
+- Implement single-target model adapters for XGBoost, LightGBM, PatchTST, LSTM and GRU, together with three baselines: zero return, training-period mean return and previous-day return.
+- Complete five-model validation experiments with the initial settings and after one round of hyperparameter tuning; save date-aligned predictions, metrics, configurations, training records, preprocessing parameters and model weights.
+- Keep the core implementation in `.py` files and use notebooks only to display results.
+- Use `python main.py` for training and validation; use `python main.py test` to load the five saved models for final testing without retraining. A separate notebook compares explicitly selected validation experiments before and after tuning.
 
-## 2. 配置环境
+The training period is 2010–2021, the validation period is 2022–2023, and the final test period is 2024–2025.
 
-以下流程适用于 Windows / Linux x86-64，使用 conda 管理 Python、pip 安装项目包。先安装 [Miniforge](https://github.com/conda-forge/miniforge)，再打开能够使用 `conda` 的终端。已有可运行的 EE6008 环境可以直接跳到第 3 节。
+## 2. Environment Setup
 
-### 2.1 打开项目并创建环境
+The following steps apply to Windows / Linux x86-64, using conda to manage Python and pip to install project packages. Install [Miniforge](https://github.com/conda-forge/miniforge) first, then open a terminal where `conda` is available. If you already have a working EE6008 environment, skip to Section 3.
 
-把终端工作目录切换到项目根目录，也就是能看到 `main.py` 的目录。如果终端当前在项目的上一级，可运行：
+### 2.1 Open the Project and Create an Environment
+
+Set the terminal's working directory to the project root, which contains `main.py`. If the terminal is currently in the project's parent directory, run:
 
 ```bash
 cd stock_prediction
 ```
 
-从空环境开始：
+Start with a new environment:
 
 ```bash
 conda create -n EE6008 python=3.12 pip -y
 conda activate EE6008
 ```
 
-如果同名环境已经存在，使用现有环境，或者为新环境换一个名称，并在后续激活、内核选择时使用该名称。项目不依赖特定环境名称。
+If an environment with this name already exists, use it or choose another name for the new environment, then use that name when activating it and selecting the notebook kernel. The project does not require a particular environment name.
 
-### 2.2 安装 PyTorch：下面两种方式选一种
+### 2.2 Install PyTorch: Choose One of the Following Options
 
-**有兼容 NVIDIA GPU 和驱动，使用 GPU 训练：**
+**For GPU training with a compatible NVIDIA GPU and driver:**
 
 ```bash
 python -m pip install torch==2.14.0 --index-url https://download.pytorch.org/whl/cu132
 ```
 
-**没有 NVIDIA GPU，或准备使用 CPU：**
+**If you do not have an NVIDIA GPU or intend to use the CPU:**
 
 ```bash
 python -m pip install torch==2.14.0 --index-url https://download.pytorch.org/whl/cpu
 ```
 
-本项目已经在 Windows、RTX 5070 Ti Laptop GPU、PyTorch 2.14.0+cu132 上运行过。CPU 与 CUDA 13.2 安装包可在 [CPU 官方索引](https://download.pytorch.org/whl/cpu/torch/) 和 [CUDA 13.2 官方索引](https://download.pytorch.org/whl/cu132/torch/) 查询。其他硬件或操作系统请按 [PyTorch 官方安装说明](https://pytorch.org/get-started/locally/) 选择对应构建。
+This project has been run on Windows with an RTX 5070 Ti Laptop GPU and PyTorch 2.14.0+cu132. CPU and CUDA 13.2 packages can be found in the [official CPU index](https://download.pytorch.org/whl/cpu/torch/) and [official CUDA 13.2 index](https://download.pytorch.org/whl/cu132/torch/). For other hardware or operating systems, select the appropriate build using the [official PyTorch installation guide](https://pytorch.org/get-started/locally/).
 
 
-### 2.3 安装其余依赖
+### 2.3 Install the Remaining Dependencies
 
 ```bash
 python -m pip install -r requirement.txt
 python -m pip check
 ```
 
-保留现有文件名 `requirement.txt`。其中固定了 PyTorch、NumPy、pandas、scikit-learn、matplotlib、XGBoost、LightGBM 和 Notebook 内核 ipykernel 的版本；先前安装的匹配 CPU / CUDA 构建满足 PyTorch 的版本要求。它是直接依赖清单，不是全部间接依赖的完整锁文件。
+Keep the existing filename `requirement.txt`. It pins versions of PyTorch, NumPy, pandas, scikit-learn, matplotlib, XGBoost, LightGBM and the notebook kernel package ipykernel. The matching CPU / CUDA build installed above satisfies the PyTorch version requirement. This is a list of direct dependencies, not a complete lockfile for all transitive dependencies.
 
-### 2.4 检查运行环境
+### 2.4 Check the Runtime Environment
 
 ```bash
 python -c "import torch, numpy, pandas, sklearn, matplotlib, xgboost, lightgbm; print('torch:', torch.__version__); print('xgboost:', xgboost.__version__); print('CUDA:', torch.cuda.is_available()); print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU')"
 ```
 
-CPU 安装下 `CUDA: False` 是正常结果。准备使用 GPU 时，应显示 `CUDA: True`，并进一步确认能实际进行 GPU 运算：
+`CUDA: False` is expected for a CPU installation. If you intend to use the GPU, the output should show `CUDA: True`. Also confirm that GPU computation actually works:
 
 ```bash
 python -c "import torch; assert torch.cuda.is_available(), 'CUDA unavailable'; x=torch.randn(32,32,device='cuda'); print((x @ x).mean().item()); torch.cuda.synchronize()"
 ```
 
-默认 XGBoost、LightGBM 使用 CPU，PatchTST、LSTM 和 GRU 的 `device=auto` 在 CUDA 可用时使用 GPU，否则使用 CPU。仅运行树模型或基线时，启动入口不会导入 PyTorch。
+By default, XGBoost and LightGBM use the CPU. For PatchTST, LSTM and GRU, `device=auto` selects the GPU when CUDA is available and the CPU otherwise. When only tree models or baselines are selected, the experiment entry point does not import PyTorch.
 
-## 3. 准备数据
+## 3. Prepare the Data
 
-数据随仓库共享，克隆或更新仓库后保留下面的相对位置：
+The data is shared through the repository. After cloning or updating it, preserve the following relative paths:
 
 ```text
 stock_prediction/
@@ -84,15 +86,15 @@ stock_prediction/
     └── TSLA_Tesla_stock_data.csv
 ```
 
-默认配置读取 AAPL 原始 CSV；`configs/tsla.json` 读取 `data/TSLA_Tesla_stock_data.csv`。两者都包含个股和 Nasdaq 行情。`data/` 只保留这两份原始 CSV；未使用的 `with_features`、`standardized` 数据集和 `__MACOSX` 元数据目录已移除。特征由公共代码重新计算，标准化统计量仅在训练数据上拟合，无需另外准备预处理后的 CSV。
+The default configuration reads the raw AAPL CSV; `configs/tsla.json` reads `data/TSLA_Tesla_stock_data.csv`. Both files contain individual-stock and Nasdaq market data. Only these two raw CSV files remain in `data/`; the unused `with_features` and `standardized` datasets and the `__MACOSX` metadata directory have been removed. The shared code recalculates features and fits standardization statistics only on training data, so no separately preprocessed CSV files are required.
 
-检查文件是否存在，并打印文件指纹：
+Check that the files exist and print their fingerprints:
 
 ```bash
 python -c "from pathlib import Path; import hashlib; files=['AAPL_Apple_stock_data.csv','TSLA_Tesla_stock_data.csv']; [print(name, hashlib.sha256((Path('data') / name).read_bytes()).hexdigest()) for name in files]"
 ```
 
-当前参考数据的 SHA-256 为：
+The SHA-256 fingerprints of the current reference data are:
 
 ```text
 AAPL_Apple_stock_data.csv
@@ -101,78 +103,78 @@ TSLA_Tesla_stock_data.csv
 9d4198faa8a2c5d05ad8c754907062872d37f587f58d918c269dbf978874e545
 ```
 
-实验中的 `data_sha256` 只对 `data_path` 指定的 CSV 文件内容计算，不对整个目录计算。删除未使用的其他文件不会改变此指纹；保留这两份原始文件的相对路径和内容，即可继续核对现有实验。
+An experiment's `data_sha256` is calculated from the contents of the CSV specified by `data_path`, not from the entire directory. Deleting other unused files does not change this fingerprint. Preserve the relative paths and contents of these two raw files to continue checking existing experiments.
 
-不同成员的指纹不一致时，先确认数据版本再比较结果。数据来源、Nasdaq 具体代码和价格复权口径仍待组员补充。
+If fingerprints differ between team members, confirm the data version before comparing results. The data source, exact Nasdaq symbol and price-adjustment conventions still need to be provided by the team.
 
-## 4. 完成本地实验：修改 JSON → 运行模型 → 查看结果
+## 4. Run a Local Experiment: Edit JSON → Run Models → View Results
 
-以下命令均在项目根目录（包含 `main.py`）执行，并先激活环境：
+Run all commands below from the project root, which contains `main.py`, and activate the environment first:
 
 ```bash
 conda activate EE6008
 ```
 
-### 4.1 运行项目检查
+### 4.1 Run the Project Checks
 
-首次配置环境或修改代码后，可运行：
+After setting up the environment for the first time or modifying the code, you can run:
 
 ```bash
 python -m unittest discover -s tests -v
 ```
 
-检查集中在 `tests/test_models.py`，验证数据对齐、标准化、指标及模型接口等。
+The checks are consolidated in `tests/test_models.py` and cover data alignment, standardization, metrics and model interfaces, among other items.
 
-### 4.2 修改 JSON 配置
+### 4.2 Edit the JSON Configuration
 
-**先选择股票配置，再修改自己负责模型的参数：** AAPL 使用 `configs/aapl.json`，TSLA 使用 `configs/tsla.json`。每个文件包含公共数据设置和五个模型的参数段。
+**Select the stock configuration first, then adjust the parameters of the model you are responsible for:** use `configs/aapl.json` for AAPL and `configs/tsla.json` for TSLA. Each file contains shared data settings and parameter sections for all five models.
 
-本轮小组调参统一基于 **8 特征**, 开始前请确保的字段为：
+This round of team tuning uses **8 features** consistently. Before starting, ensure the following setting is in place:
 
 ```json
 "nasdaq_features": "all"
 ```
 
 
-**公共配置项：**
+**Shared configuration fields:**
 
-| 字段 | 含义与修改方法 |
+| Field | Meaning and How to Change It |
 |---|---|
-| `ticker` / `data_path` | 股票名称 / 原始 CSV 的项目相对路径；两者应对应。换股票优先用 `--config` 选择对应文件，不能只改股票名称 |
-| `nasdaq_features` | `"all"` 为 8 特征，`"return_volume"` 为 6 特征，具体见下表 |
-| `start` / `train_end` / `validation_end` | 数据起始日、训练结束日、验证结束日；按预测目标日期划分。本轮调参保持原设置 |
-| `test_end` / `holdout_end` | 最终测试期及额外保留期的约定日期；普通训练命令不评价测试集，`main.py test` 使用源实验快照中的测试边界 |
-| `window` | 历史输入交易日数，目前为 60；本轮调参保持一致 |
-| `seed` | 随机种子，目前为 42；本轮比较保持一致，多种子实验另行约定 |
+| `ticker` / `data_path` | Stock symbol / project-relative path to the raw CSV; the two should correspond. To switch stocks, use `--config` to select the appropriate file rather than changing only the stock symbol |
+| `nasdaq_features` | `"all"` selects 8 features; `"return_volume"` selects 6 features. See the table below |
+| `start` / `train_end` / `validation_end` | Data start date, training end date and validation end date; splits are based on prediction target dates. Keep the existing settings for this tuning round |
+| `test_end` / `holdout_end` | Agreed end dates for the final test period and additional holdout period; ordinary training commands do not evaluate the test set, and `main.py test` uses the test boundaries in the source experiment's configuration snapshot |
+| `window` | Number of historical trading days used as input, currently 60; keep it consistent during this tuning round |
+| `seed` | Random seed, currently 42; keep it consistent for this comparison, with multi-seed experiments to be agreed separately |
 
-**切换 8 / 6 特征只需修改 `nasdaq_features`：**
+**To switch between 8 and 6 features, change only `nasdaq_features`:**
 
-| 配置值 | 个股特征 | Nasdaq 特征 | 总数 |
+| Configuration Value | Stock Features | Nasdaq Features | Total |
 |---|---|---|---|
-| `"all"` | `return`, `vol_change`, `intraday_return`, `range` | 同样四项，加 `nasdaq_` 前缀 | 8 |
-| `"return_volume"` | 同上 | `nasdaq_return`, `nasdaq_vol_change` | 6 |
+| `"all"` | `return`, `vol_change`, `intraday_return`, `range` | The same four features with the `nasdaq_` prefix | 8 |
+| `"return_volume"` | Same as above | `nasdaq_return`, `nasdaq_vol_change` | 6 |
 
-`nasdaq_vol_change = nasdaq_volume[t] / nasdaq_volume[t-1] - 1`，是成交量变化率。两种配置使用同一原始 CSV，无需手动删列；标准化仍由代码根据训练数据完成。
+`nasdaq_vol_change = nasdaq_volume[t] / nasdaq_volume[t-1] - 1` is the rate of change in trading volume. Both configurations use the same raw CSV, so there is no need to delete columns manually. Standardization is still performed in code using training data.
 
-**模型参数项：**
+**Model parameters:**
 
-| JSON 段落 | 常用可调参数及含义 |
+| JSON Section | Common Tunable Parameters and Their Meanings |
 |---|---|
-| `xgboost` | `max_depth`：树深；`min_child_weight`：子节点最小权重约束；`n_estimators`：最大树数量；`learning_rate`：学习率；`subsample` / `colsample_bytree`：样本 / 特征抽样比例；`reg_lambda`：L2 正则化强度 |
-| `lightgbm` | `num_leaves` / `max_depth`：树复杂度；`min_child_samples`：叶节点最少样本数；`n_estimators`、`learning_rate`、抽样比例、`reg_alpha` / `reg_lambda`：L1 / L2 正则化强度 |
-| `patchtst` | `patch_len` / `stride`：时间片段长度 / 步长；`d_model`：表示维度；`n_heads`：注意力头数；`n_layers`：编码层数；`d_ff`：前馈网络宽度 |
-| `lstm` / `gru` | `hidden_size`：隐藏状态维度；`num_layers`：循环网络层数 |
-| 三种神经网络共用 | `learning_rate`：学习率；`dropout`：训练时随机置零部分激活的比例；`weight_decay`：权重衰减；`batch_size`：每批样本数；`epochs`：最大训练轮数；`patience`：验证表现连续不改善多少轮后停止 |
+| `xgboost` | `max_depth`: tree depth; `min_child_weight`: minimum child-node weight constraint; `n_estimators`: maximum number of trees; `learning_rate`: learning rate; `subsample` / `colsample_bytree`: sample / feature sampling fractions; `reg_lambda`: L2 regularization strength |
+| `lightgbm` | `num_leaves` / `max_depth`: tree complexity; `min_child_samples`: minimum number of samples in a leaf; `n_estimators`, `learning_rate`, sampling fractions, and `reg_alpha` / `reg_lambda`: L1 / L2 regularization strengths |
+| `patchtst` | `patch_len` / `stride`: temporal patch length / step size; `d_model`: representation dimension; `n_heads`: number of attention heads; `n_layers`: number of encoder layers; `d_ff`: feed-forward network width |
+| `lstm` / `gru` | `hidden_size`: hidden-state dimension; `num_layers`: number of recurrent layers |
+| Shared by the three neural networks | `learning_rate`: learning rate; `dropout`: fraction of activations randomly set to zero during training; `weight_decay`: weight decay; `batch_size`: samples per batch; `epochs`: maximum number of training epochs; `patience`: number of consecutive epochs without validation improvement before stopping |
 
-树模型的 `early_stopping_rounds` 同样控制验证早停。`n_jobs` 控制树模型 CPU 并行线程数；神经网络的 `device` 可选 `"auto"`、`"cpu"`、`"cuda"`，使用 CUDA 需要环境和硬件支持。当前树模型配置使用 CPU。
+For tree models, `early_stopping_rounds` also controls validation-based early stopping. `n_jobs` controls CPU parallelism for tree models. Neural-network `device` options are `"auto"`, `"cpu"` and `"cuda"`; CUDA requires compatible hardware and an appropriate environment. The current tree-model configurations use the CPU.
 
-参数需满足实现约束：PatchTST 要求 `d_model` 能被 `n_heads` 整除，`0 < stride <= patch_len <= window`，且 `(window - patch_len)` 能被 `stride` 整除；GRU 若设 `num_layers=1`，需同时设 `dropout=0`。
+Parameters must satisfy the implementation constraints: PatchTST requires `d_model` to be divisible by `n_heads`, `0 < stride <= patch_len <= window`, and `(window - patch_len)` to be divisible by `stride`. If GRU uses `num_layers=1`, set `dropout=0` as well.
 
 
 
-### 4.3 运行实验与命令行参数
+### 4.3 Run Experiments and Use Command-Line Arguments
 
-JSON 保存后即可运行，不必把 JSON 中的设置重复写到命令行。以 AAPL 的单模型调参为例，按单模型模型选择一条命令：
+After saving the JSON file, you can run the experiment without repeating its settings on the command line. For single-model tuning on AAPL, select one command for the model you want to run:
 
 ```bash
 python main.py --config configs/aapl.json --models xgboost --run-name aapl_xgboost_tune_01
@@ -182,80 +184,80 @@ python main.py --config configs/aapl.json --models lstm --run-name aapl_lstm_tun
 python main.py --config configs/aapl.json --models gru --run-name aapl_gru_tune_01
 ```
 
-TSLA 只需选择对应配置，例如：
+For TSLA, select its configuration instead, for example:
 
 ```bash
 python main.py --config configs/tsla.json --models xgboost --run-name tsla_xgboost_tune_01
 ```
 
-| 参数 | 作用 |
+| Argument | Purpose |
 |---|---|
-| `--config` | 指定 JSON 配置路径；省略时读取 `configs/aapl.json`。也可读取自己复制、编辑的完整配置文件 |
-| `--models` | 选择模型，可填写一个或多个：`xgboost lightgbm patchtst lstm gru`；省略时运行全部五个。`baselines` 表示只运行简单基线；任何模型实验都会附带简单基线 |
-| `--run-name` | 指定 `artifacts/` 下的新结果目录名；仅允许英文字母、数字、下划线和连字符。不能与已有目录重名；省略时自动生成时间戳名称 |
-| `--nasdaq-features` | 可选，临时覆盖 JSON 的特征设置，取值 `all` 或 `return_volume`；覆盖后的值会写入本次结果快照，不修改原配置文件 |
-| `--help` | 查看入口支持的参数 |
+| `--config` | Path to the JSON configuration; defaults to `configs/aapl.json` when omitted. You can also supply a complete configuration file that you have copied and edited |
+| `--models` | Select one or more models from `xgboost lightgbm patchtst lstm gru`; runs all five when omitted. `baselines` runs only the simple baselines; every model experiment also includes the simple baselines |
+| `--run-name` | Name of a new result directory under `artifacts/`; only English letters, digits, underscores and hyphens are allowed. It must not duplicate an existing directory name; a timestamp-based name is generated when omitted |
+| `--nasdaq-features` | Optional temporary override of the JSON feature setting, either `all` or `return_volume`; the overridden value is saved in the result snapshot without modifying the original configuration file |
+| `--help` | Display the arguments supported by the entry point |
 
-优先级为 **命令行 `--nasdaq-features` > JSON 中的 `nasdaq_features` > 未设置时默认 `all`**。例如 JSON 已设为 `"all"` 就不需要额外参数；需要临时强制使用 8 特征时可以运行：
+The precedence is **command-line `--nasdaq-features` > JSON `nasdaq_features` > default `all` when neither is set**. For example, if the JSON already specifies `"all"`, no extra argument is required. To temporarily force 8 features, run:
 
 ```bash
 python main.py --config configs/aapl.json --models xgboost --nasdaq-features all --run-name aapl_xgboost_tune_02
 ```
 
 
-### 4.4 查看结果：先看这三项
+### 4.4 View Results: Start with These Three Files
 
-更新代码后，Notebook 建议先重启内核，再运行全部单元格。
+After updating the code, restart the notebook kernel before running all cells.
 
-| 文件 | 先关注什么 |
+| File | What to Check First |
 |---|---|
-| `metrics.csv` | 比较各模型 RMSE、MAE（越低越好）及方向准确率 |
-| `validation_comparison.png` | 直观看误差和方向表现 |
-| `predictions.csv` | 每个目标日的真实收益和各模型预测，用于分析及小组合并 |
+| `metrics.csv` | Compare model RMSE and MAE (lower is better), together with directional accuracy |
+| `validation_comparison.png` | Visually compare return errors and directional performance |
+| `predictions.csv` | Actual returns and model predictions for each target date, for analysis and integration of team results |
 
-`mae`、`rmse` 使用小数收益单位，例如误差 `0.01` 对应 1 个百分点。图中已乘以 100。方向由收益是否大于 0 得到，平盘归入“不涨”。回归误差小与方向准确率高是两个不同目标，应分别报告。
+`mae` and `rmse` use decimal return units: an error of `0.01` corresponds to 1 percentage point. Values in the plots are multiplied by 100. Direction is determined by whether the return is greater than 0, with flat returns classified as “not up.” Low regression error and high directional accuracy are different objectives and should be reported separately.
 
-完整结果包还包含：
+The complete result package also contains:
 
-| 文件 | 作用 |
+| File | Purpose |
 |---|---|
-| `metrics.json` | 完整指标和混淆矩阵；矩阵行是真实类别、列是预测类别，顺序为 `[不涨, 上涨]` |
-| `direction_reference.json` | 用训练期多数方向作预测时的验证准确率 |
-| `data_audit.json` | 样本数量、日期边界及无效窗口记录 |
-| `preprocessing.json` | 特征顺序、训练均值和标准差、目标缩放参数 |
-| `config.json` | 本次运行的配置快照，应以它解释对应实验 |
-| `manifest.json` | 是否完成、数据和代码指纹、环境版本、随机种子及评价分区 |
-| `training.json` | 训练耗时、设备、最佳轮次和学习曲线 |
-| `xgboost.ubj` / `lightgbm.txt` / `patchtst.pt` / `lstm.pt` / `gru.pt` | 本次训练模型的最佳权重，需配合预处理参数使用；只生成所选模型文件 |
+| `metrics.json` | Complete metrics and confusion matrices; rows represent actual classes and columns represent predicted classes, ordered as `[not up, up]` |
+| `direction_reference.json` | Validation accuracy when predicting the majority direction from the training period |
+| `data_audit.json` | Sample counts, date boundaries and invalid-window records |
+| `preprocessing.json` | Feature order, training means and standard deviations, and target-scaling parameters |
+| `config.json` | Configuration snapshot for this run; use it to interpret the corresponding experiment |
+| `manifest.json` | Completion status, data and code fingerprints, environment versions, random seed and evaluation split |
+| `training.json` | Training time, device, best iteration or epoch, and learning curves |
+| `xgboost.ubj` / `lightgbm.txt` / `patchtst.pt` / `lstm.pt` / `gru.pt` | Best saved model weights from this training run, to be used with the preprocessing parameters; files are generated only for the selected models |
 
-`r2` 相对验证集真实均值计算，`r2_vs_zero = 1-SSE/sum(y²)` 相对零收益预测计算。
+`r2` is calculated relative to the actual mean return in the validation set; `r2_vs_zero = 1-SSE/sum(y²)` is calculated relative to zero-return predictions.
 
-### 4.5 使用 Notebook 展示
+### 4.5 Display Results in Notebooks
 
-`notebooks/results_display/` 存放单次实验和最终测试的结果展示；`notebooks/result_comparison/` 存放 Nasdaq 特征、超参数调优和最终测试调优前后的对比。Notebook 会从当前工作目录逐级向上定位项目根目录，因此在项目根目录或这两个子文件夹中运行均可；实验目录名仍只填写 `artifacts/` 下的名称，无需添加 `../`。
+`notebooks/results_display/` contains displays for individual experiments and final tests. `notebooks/result_comparison/` contains Nasdaq feature comparisons, hyperparameter-tuning comparisons, and before/after-tuning comparisons on the final test set. Notebooks search upward from the current working directory to locate the project root, so they can run from either the project root or these two subdirectories. Specify only the experiment directory name under `artifacts/`; do not add `../`.
 
-单次实验可用 `notebooks/results_display/01_AAPL_original_5models.ipynb` 或 `notebooks/results_display/01_TSLA_original_5models.ipynb` 展示。两者使用相同的通用读取规则。单模型调参请设置 `REQUIRE_ALL_MODELS = False`。
+Use `notebooks/results_display/01_AAPL_original_5models.ipynb` or `notebooks/results_display/01_TSLA_original_5models.ipynb` to display an individual experiment. Both follow the same general loading rules. For single-model tuning, set `REQUIRE_ALL_MODELS = False`.
 
-在开头**必须填写**实验目录名，例如：
+You **must specify** the experiment directory name near the beginning, for example:
 
 ```python
 RUN_NAME = "aapl_xgboost_tune_01"
 REQUIRE_ALL_MODELS = False
 ```
 
-展示另一轮实验时，只需将 `RUN_NAME` 改为 `artifacts/` 下实际存在的目录名称（例如 `"tsla_xgboost_tune_01"`），再从头运行。
+To display another experiment, change `RUN_NAME` to an existing directory name under `artifacts/`, such as `"tsla_xgboost_tune_01"`, then rerun the notebook from the beginning.
 
-- 股票名称由 `artifacts/<RUN_NAME>/config.json` 的 `ticker` 获取；数据路径、日期范围、窗口、随机种子和模型参数也来自这份快照。
-- `REQUIRE_ALL_MODELS = True` 要求所选实验包含五种模型；查看单模型或部分模型实验时设为 `False`。
-- 读取 `predictions.csv`、`metrics.json`、`training.json`、`manifest.json`、`preprocessing.json` 和 `direction_reference.json`，核对原始数据指纹、日期、真实收益及指标。
-- 依次展示实验目录校验与资源记录、按方向准确率降序排列的结果表格，以及模型预测曲线。
-- `RECENT_DAYS` 只控制右侧局部曲线的展示日数（默认 80），左侧展示完整验证期，不影响历史输入窗口或全期指标。
-- 选择 EE6008 内核后从头运行。如一直转圈，可先单独执行 `print("kernel ready")` 检查内核是否响应。
-- 原始 CSV 必须仍位于快照指定的位置，且与训练时数据指纹一致。新增股票只要遵循现有公共数据格式和实验输出约定，就能复用任一本 Notebook；改变特征定义或预测任务仍需同步公共代码。
+- The stock symbol is read from `ticker` in `artifacts/<RUN_NAME>/config.json`; the data path, date range, window, random seed and model parameters also come from this snapshot.
+- `REQUIRE_ALL_MODELS = True` requires all five models in the selected experiment; set it to `False` to view an experiment containing one model or a subset of models.
+- The notebook reads `predictions.csv`, `metrics.json`, `training.json`, `manifest.json`, `preprocessing.json` and `direction_reference.json`, checking the raw-data fingerprint, dates, actual returns and metrics.
+- It displays experiment-directory checks and resource records, a result table sorted by directional accuracy in descending order, and model prediction curves.
+- `RECENT_DAYS` controls only the number of days shown in the right-hand recent-period plots (80 by default). The left-hand plots show the full validation period. This setting does not affect the historical input window or full-period metrics.
+- Select the EE6008 kernel and run the notebook from the beginning. If execution keeps spinning, first run `print("kernel ready")` in a separate cell to check whether the kernel responds.
+- The raw CSV must remain at the location specified in the snapshot and match the data fingerprint recorded during training. Any new stock can use these notebooks if it follows the shared data format and experiment-output conventions. Changes to feature definitions or the prediction task must also be reflected in the shared code.
 
-现有参考配置下，AAPL 为 2,960 条训练样本、501 条验证样本；TSLA 为 2,838 条训练样本、501 条验证样本。实际数量应以所选实验记录为准。
+Under the current reference configuration, AAPL has 2,960 training samples and 501 validation samples; TSLA has 2,838 training samples and 501 validation samples. Use the selected experiment's records as the authority for actual counts.
 
-**比较超参数调优前后：** 打开 `notebooks/result_comparison/hyperparameter_tuning_comparison.ipynb`，选择 EE6008 内核并从头运行。默认同时比较 AAPL、TSLA 的五模型结果：
+**Compare results before and after hyperparameter tuning:** open `notebooks/result_comparison/hyperparameter_tuning_comparison.ipynb`, select the EE6008 kernel and run from the beginning. By default, it compares the five-model results for both AAPL and TSLA:
 
 ```python
 RUN_PAIRS = [
@@ -264,88 +266,85 @@ RUN_PAIRS = [
 ]
 ```
 
-每一对按“调优前、调优后”填写 `artifacts/` 下的目录名。股票名称来自各自 `config.json`；切换实验或增加股票只需修改 `RUN_PAIRS`，然后重启内核并运行全部单元格。
+Each pair contains directory names under `artifacts/` in the order “before tuning, after tuning.” Stock symbols come from the respective `config.json` files. To switch experiments or add stocks, modify `RUN_PAIRS`, then restart the kernel and run all cells.
 
-该 Notebook 只读取保存的配置和指标，展示共用参数改动、调优前后的结果表格（含方向准确率改善率）及变化幅度柱状图，不重复校验数据指纹或重算指标。所有比较均为验证集结果。
+This notebook reads only saved configurations and metrics. It displays shared parameter changes, before/after result tables (including relative improvement in directional accuracy), and bar charts showing the changes. It does not repeat data-fingerprint checks or recalculate metrics. All comparisons use validation results.
 
-### 4.6 最终测试：直接使用之前实验中已保存的五个模型
+### 4.6 Final Testing: Use the Five Models Saved in Previous Experiments
 
-在项目根目录、EE6008 环境中运行（已有完整结果时直接查看，不必重复执行；输出目录不能重名）：
+Run the following from the project root in the EE6008 environment. If complete results already exist, view them directly rather than rerunning the tests; output directory names must be unique:
 
 ```bash
 python main.py test --source-run aapl_compare_all_02 --run-name aapl_final_test_02
 python main.py test --source-run tsla_compare_all_02 --run-name tsla_final_test_02
 ```
 
-每条命令会执行以下流程：
+Each command performs the following steps:
 
-1. 从 `--source-run` 指定目录读取 `config.json`、`preprocessing.json`、`training.json`、`manifest.json`、`direction_reference.json`、验证预测及五份模型权重。不会读取 `configs/` 当前配置。
-2. 核对原始 CSV 指纹，恢复最佳树前缀与神经网络权重，先重现已有验证预测。若日期、标签、输入形状或预测不匹配则停止，不进行测试。
-3. 仅评价 `validation_end < target_date <= test_end`，目前为 2024—2025 年；每天用预测日之前已经观测到的最近 60 个交易日预测下一交易日，窗口可以包含较早的测试期行情，但模型与缩放参数始终固定。
-4. 对五个模型及三个简单基线计算测试指标。历史平均收益及多数方向仍来自原训练期。
+1. Read `config.json`, `preprocessing.json`, `training.json`, `manifest.json`, `direction_reference.json`, validation predictions and the five sets of model weights from the directory specified by `--source-run`. The current configuration in `configs/` is not read.
+2. Check the raw CSV fingerprint, restore the selected tree ensemble prefix and neural-network weights, and first reproduce the saved validation predictions. If dates, labels, input shapes or predictions do not match, stop without performing the test evaluation.
+3. Evaluate only targets satisfying `validation_end < target_date <= test_end`, currently covering 2024–2025. Each next-trading-day prediction uses the most recent 60 trading days observed before the target date. The window may contain earlier test-period observations, but the model and scaling parameters remain fixed.
+4. Compute test metrics for the five models and three simple baselines. The historical mean return and majority direction still come from the original training period.
 
-可选参数：`--device cpu` 强制神经网络在 CPU 推理，`--device cuda` 强制 GPU，默认 `auto`；树模型使用 CPU。`--batch-size 128` 只改变推理批大小，不修改原训练参数。没有 `--config`、`--models` 或超参数覆盖选项，始终恢复源实验的全部五个模型。
-如只检查能否恢复模型，暂不执行测试：
+Optional arguments: `--device cpu` forces neural-network inference on the CPU; `--device cuda` forces the GPU; the default is `auto`. Tree models use the CPU. `--batch-size 128` changes only the inference batch size, not the original training parameters. There are no `--config`, `--models` or hyperparameter-override options; all five models from the source experiment are always restored.
+To check that the models can be restored without evaluating the test set:
 
 ```bash
 python main.py test --source-run aapl_compare_all_02 --check-only
 python main.py test --source-run tsla_compare_all_02 --check-only
 ```
-当前调优后模型的测试输出位于 `artifacts/aapl_final_test_02/` 和 `artifacts/tsla_final_test_02/`；现有 `final_test_01` 来自调优前的 `compare_all_01`。模型来源以 `manifest.json` 的 `source_run` 为准。
+The current tuned-model test outputs are in `artifacts/aapl_final_test_02/` and `artifacts/tsla_final_test_02/`. The existing `final_test_01` results come from the original, untuned `compare_all_01` experiments. Use `source_run` in `manifest.json` to identify the model source.
 
-| 文件 | 用途 |
+| File | Purpose |
 |---|---|
-| `metrics.csv` / `metrics.json` | 五个模型和三个基线的测试指标 |
-| `predictions.csv` | 测试目标日、真实收益、方向和模型预测 |
-| `test_comparison.png` | 明确标注 Test 的误差及方向对比图 |
-| `manifest.json` | 应为 `status=complete`、`evaluation_split=test`、`retrained=false`、`test_evaluated=true`、`holdout_evaluated=false`；记录源实验及文件指纹 |
-| `config.json` / `preprocessing.json` | 沿用源实验的配置与训练期缩放参数 |
-| `source_manifest.json` / `validation_replay.json` | 原实验记录，以及恢复模型后对已有验证预测的一致性检查 |
-| `data_audit.json` / `inference.json` | 实际测试日期、有效样本数、跳过样本及推理设备、耗时 |
-| `direction_reference.json` | 原训练期多数方向在测试集上的准确率 |
+| `metrics.csv` / `metrics.json` | Test metrics for the five models and three baselines |
+| `predictions.csv` | Test target dates, actual returns, directions and model predictions |
+| `test_comparison.png` | Error and direction comparison plots explicitly labeled Test |
+| `manifest.json` | Should record `status=complete`, `evaluation_split=test`, `retrained=false`, `test_evaluated=true` and `holdout_evaluated=false`; also records the source experiment and file fingerprints |
+| `config.json` / `preprocessing.json` | Configuration and training-period scaling parameters carried over from the source experiment |
+| `source_manifest.json` / `validation_replay.json` | Original experiment record and consistency checks against the saved validation predictions after restoring the models |
+| `data_audit.json` / `inference.json` | Actual test dates, valid sample counts, skipped samples, inference device and elapsed time |
+| `direction_reference.json` | Test accuracy of the majority direction learned from the original training period |
 
-测试入口不输出新的训练记录或模型权重。 最终测试使用下方专用的 Notebook。
+The test entry point does not produce new training records or model weights. Use the dedicated notebooks below for final-test results.
 
-**汇总两只股票的最终测试：** 调优前使用 `notebooks/results_display/01_final_test_results.ipynb`，调优后打开 `notebooks/results_display/02_final_test_results.ipynb`，开头显式指定两个目录。实验流程、指标解释与结果分析见 [EXPERIMENT_SUMMARY.md](EXPERIMENT_SUMMARY.md)。
+**Display final-test results for both stocks:** use `notebooks/results_display/01_final_test_results.ipynb` for the original models and `notebooks/results_display/02_final_test_results.ipynb` for the tuned models, explicitly specifying the two directories near the beginning. See [EXPERIMENT_SUMMARY.md](EXPERIMENT_SUMMARY.md) for the experiment workflow, metric explanations and result analysis.
 
 ```python
 RUN_NAMES = ["aapl_final_test_02", "tsla_final_test_02"]
 ```
 
-选择 EE6008 内核，重启并运行全部单元格；切换股票或结果只需修改 `RUN_NAMES`。只接受两个不同股票的完整测试实验。
-页面展示各股票按方向准确率降序排列的结果表格（含简单基线）和模型预测曲线。每只股票独立成图，左侧为完整测试期，右侧为最近 80 个交易日。
+Select the EE6008 kernel, restart it and run all cells. To switch stocks or results, change only `RUN_NAMES`. The notebook accepts complete test experiments for two different stocks only.
+It displays a result table for each stock, including the simple baselines and sorted by directional accuracy in descending order, together with model prediction curves. Each stock has a separate figure: the full test period is on the left and the most recent 80 trading days are on the right.
 
-**比较调优前后的最终测试：** 打开 `notebooks/result_comparison/final_test_tuning_comparison.ipynb`，手动设置 `RUN_PAIRS`，例如 `[("aapl_final_test_01", "aapl_final_test_02"), ("tsla_final_test_01", "tsla_final_test_02")]`。每一对依次为调优前、调优后的测试目录；只展示结果表格和变化幅度柱状图。表格中的方向准确率改善率为 `(调优后 − 调优前) / 调优前 × 100%`，柱状图中的方向准确率变化为百分点。
-
-
+**Compare final-test results before and after tuning:** open `notebooks/result_comparison/final_test_tuning_comparison.ipynb` and set `RUN_PAIRS` manually, for example `[("aapl_final_test_01", "aapl_final_test_02"), ("tsla_final_test_01", "tsla_final_test_02")]`. Each pair lists the test directories before and after tuning, in that order. Only result tables and bar charts showing the changes are displayed. Relative improvement in directional accuracy in the tables is calculated as `(after tuning − before tuning) / before tuning × 100%`; directional accuracy changes in the bar charts are expressed in percentage points.
 
 
-## 5. 文件结构
+
+
+## 5. File Structure
 
 ```text
 stock_prediction/
-├── main.py                   # 日常使用的实验入口
-├── README.md                 # 当前进展和操作手册
-├── PROJECT_PLAN.md           # 共同约定、成员任务、待同步事项
-├── cooperation.md            # GitHub 分支与 PR 协作步骤
-├── requirement.txt           # Python 直接依赖版本
-├── configs/                 # aapl.json、tsla.json：股票数据及五模型参数
-├── data/                     # 两份原始 CSV：AAPL、TSLA 的 stock_data
+├── main.py                   # Main entry point for everyday experiments
+├── README.md                 # Current progress and operating instructions
+├── PROJECT_PLAN.md           # Shared conventions, team tasks and items to coordinate
+├── cooperation.md            # GitHub branch and PR collaboration workflow
+├── requirement.txt           # Direct Python dependency versions
+├── configs/                 # aapl.json and tsla.json: stock data and five-model parameters
+├── data/                     # Two raw CSV files: AAPL and TSLA stock_data
 ├── src/
-│   ├── data.py               # 共同的数据处理
-│   ├── baselines.py          # 简单预测基线
-│   ├── evaluate.py           # 共同的指标和绘图
-│   ├── inference.py          # 恢复五个已保存模型，仅推理
-│   └── models/               # XGBoost、LightGBM、PatchTST、LSTM、GRU
-├── scripts/run_experiment.py # 训练与验证入口
-├── scripts/evaluate_test.py  # 冻结模型的最终测试入口
+│   ├── data.py               # Shared data processing
+│   ├── baselines.py          # Simple prediction baselines
+│   ├── evaluate.py           # Shared metrics and plotting
+│   ├── inference.py          # Restore the five saved models for inference only
+│   └── models/               # XGBoost, LightGBM, PatchTST, LSTM and GRU
+├── scripts/run_experiment.py # Training and validation entry point
+├── scripts/evaluate_test.py  # Final-test entry point using frozen models
 ├── notebooks/
-│   ├── results_display/     # 单次验证实验、双股票最终测试展示（8 个）
-│   └── result_comparison/   # 特征、验证调参、最终测试调参对比（3 个）
-├── tests/test_models.py      # 统一的数据、指标及模型检查
-├── artifacts/                # 各次实验输出
-└── private/                  # 个人笔记，不提交 Git
+│   ├── results_display/     # Individual validation experiments and two-stock final-test displays (8)
+│   └── result_comparison/   # Feature, validation tuning and final-test tuning comparisons (3)
+├── tests/test_models.py      # Shared data, metric and model checks
+├── artifacts/                # Experiment outputs
+└── private/                  # Personal notes, excluded from Git
 ```
-
-
-
