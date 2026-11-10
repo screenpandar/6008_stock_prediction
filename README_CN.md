@@ -1,8 +1,23 @@
-# EE6008：单股票下一交易日收益预测
+<h1 align="center">📈 看过最近 60 个交易日，能预测下一个交易日吗？</h1>
 
-本项目用个股和 Nasdaq 市场历史信息，预测下一交易日的收盘收益率，并辅助评价涨跌方向。目前已有 AAPL 和 TSLA 实验。
+<p align="center"><strong>EE6008 · 苹果（AAPL）与特斯拉（TSLA）的下一交易日收益率预测</strong></p>
 
-## 1. 工作内容
+<p align="center">
+  <img alt="Python 3.12" src="https://img.shields.io/badge/Python-3.12-3776AB">
+  <img alt="5 个模型" src="https://img.shields.io/badge/Models-5-6F42C1">
+  <img alt="6 或 8 个特征" src="https://img.shields.io/badge/Features-6%20or%208-287D63">
+</p>
+
+<p align="center">
+  <a href="README.md">English README</a> ·
+  <a href="#run-models">运行实验</a> ·
+  <a href="notebooks/results_display/02_final_test_results.ipynb">查看最终测试结果</a> ·
+  <a href="notebooks/result_comparison/final_test_tuning_comparison.ipynb">对比调参效果</a>
+</p>
+
+## 1. 🔎 我们在预测什么？
+
+假设今天刚收盘，每个模型都能看到一只股票和 Nasdaq 市场最近 60 个交易日的价格与成交量。它要预测的是，从今天收盘到下一个交易日收盘，这只股票的收益率是多少。我们既看预测值与实际收益相差多少，也看模型有没有猜对涨跌方向。
 
 - 从原始 CSV 构造共同数据集，支持每天 8 或 6 个特征、最近 60 个交易日作为输入；默认以8特征为主。
 - 实现 XGBoost、LightGBM、PatchTST、LSTM、GRU 单目标适配模型，以及零收益、训练期平均收益、延续前一日收益三种基线。
@@ -10,9 +25,9 @@
 - 核心代码使用 `.py`，Notebook 仅用于展示结果。
 - `python main.py` 执行训练和验证；`python main.py test` 加载已保存的五个模型执行最终测试，不重新训练。另有 Notebook 比较指定的调优前后验证实验。
 
-训练期为 2010—2021 年，验证期为 2022—2023 年；2024—2025 年进行最终测试
+**2010—2021 年** 训练 → **2022—2023 年** 验证 → **2024—2025 年** 最终测试
 
-## 2. 配置环境
+## 2. 🛠️ 配置环境
 
 以下流程适用于 Windows / Linux x86-64，使用 conda 管理 Python、pip 安装项目包。先安装 [Miniforge](https://github.com/conda-forge/miniforge)，再打开能够使用 `conda` 的终端。已有可运行的 EE6008 环境可以直接跳到第 3 节。
 
@@ -73,7 +88,7 @@ python -c "import torch; assert torch.cuda.is_available(), 'CUDA unavailable'; x
 
 默认 XGBoost、LightGBM 使用 CPU，PatchTST、LSTM 和 GRU 的 `device=auto` 在 CUDA 可用时使用 GPU，否则使用 CPU。仅运行树模型或基线时，启动入口不会导入 PyTorch。
 
-## 3. 准备数据
+## 3. 🗂️ 准备数据
 
 数据随仓库共享，克隆或更新仓库后保留下面的相对位置：
 
@@ -105,7 +120,7 @@ TSLA_Tesla_stock_data.csv
 
 不同成员的指纹不一致时，先确认数据版本再比较结果。数据来源、Nasdaq 具体代码和价格复权口径仍待组员补充。
 
-## 4. 完成本地实验：修改 JSON → 运行模型 → 查看结果
+## 4. 🧪 完成本地实验：修改 JSON → 运行模型 → 查看结果
 
 以下命令均在项目根目录（包含 `main.py`）执行，并先激活环境：
 
@@ -169,6 +184,8 @@ python -m unittest discover -s tests -v
 参数需满足实现约束：PatchTST 要求 `d_model` 能被 `n_heads` 整除，`0 < stride <= patch_len <= window`，且 `(window - patch_len)` 能被 `stride` 整除；GRU 若设 `num_layers=1`，需同时设 `dropout=0`。
 
 
+
+<a name="run-models"></a>
 
 ### 4.3 运行实验与命令行参数
 
@@ -320,7 +337,7 @@ RUN_NAMES = ["aapl_final_test_02", "tsla_final_test_02"]
 
 
 
-## 5. 文件结构
+## 5. 🗺️ 文件结构
 
 ```text
 stock_prediction/

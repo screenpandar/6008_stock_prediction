@@ -1,10 +1,23 @@
-# EE6008: Single-Stock Next-Trading-Day Return Prediction
+<h1 align="center">📈 Can 60 trading days help predict the next one?</h1>
 
-[中文版 README](README_CN.md)
+<p align="center"><strong>EE6008 · Next-day return forecasting for Apple (AAPL) and Tesla (TSLA)</strong></p>
 
-This project uses historical information about individual stocks and the Nasdaq market to predict the next trading day's closing return, with supplementary evaluation of price direction. Experiments are currently available for AAPL and TSLA.
+<p align="center">
+  <img alt="Python 3.12" src="https://img.shields.io/badge/Python-3.12-3776AB">
+  <img alt="Models: 5" src="https://img.shields.io/badge/Models-5-6F42C1">
+  <img alt="Features: 6 or 8" src="https://img.shields.io/badge/Features-6%20or%208-287D63">
+</p>
 
-## 1. Project Work
+<p align="center">
+  <a href="README_CN.md">中文版 README</a> ·
+  <a href="#run-models">Run an experiment</a> ·
+  <a href="notebooks/results_display/02_final_test_results.ipynb">View final test results</a> ·
+  <a href="notebooks/result_comparison/final_test_tuning_comparison.ipynb">Compare tuning results</a>
+</p>
+
+## 1. 🔎 What does the project predict?
+
+At today's close, each model has seen 60 trading days of prices and trading volumes for one stock and the Nasdaq market. It predicts the stock's return from today's close to the next trading day's close. We check both the size of the error and whether the model got the direction right.
 
 - Build a shared dataset from raw CSV files, using the most recent 60 trading days with either 8 or 6 features per day; 8 features are the default.
 - Implement single-target model adapters for XGBoost, LightGBM, PatchTST, LSTM and GRU, together with three baselines: zero return, training-period mean return and previous-day return.
@@ -12,9 +25,9 @@ This project uses historical information about individual stocks and the Nasdaq 
 - Keep the core implementation in `.py` files and use notebooks only to display results.
 - Use `python main.py` for training and validation; use `python main.py test` to load the five saved models for final testing without retraining. A separate notebook compares explicitly selected validation experiments before and after tuning.
 
-The training period is 2010–2021, the validation period is 2022–2023, and the final test period is 2024–2025.
+**2010–2021** Training → **2022–2023** Validation → **2024–2025** Final testing
 
-## 2. Environment Setup
+## 2. 🛠️ Environment Setup
 
 The following steps apply to Windows / Linux x86-64, using conda to manage Python and pip to install project packages. Install [Miniforge](https://github.com/conda-forge/miniforge) first, then open a terminal where `conda` is available. If you already have a working EE6008 environment, skip to Section 3.
 
@@ -75,7 +88,7 @@ python -c "import torch; assert torch.cuda.is_available(), 'CUDA unavailable'; x
 
 By default, XGBoost and LightGBM use the CPU. For PatchTST, LSTM and GRU, `device=auto` selects the GPU when CUDA is available and the CPU otherwise. When only tree models or baselines are selected, the experiment entry point does not import PyTorch.
 
-## 3. Prepare the Data
+## 3. 🗂️ Prepare the Data
 
 The data is shared through the repository. After cloning or updating it, preserve the following relative paths:
 
@@ -107,7 +120,7 @@ An experiment's `data_sha256` is calculated from the contents of the CSV specifi
 
 If fingerprints differ between team members, confirm the data version before comparing results. The data source, exact Nasdaq symbol and price-adjustment conventions still need to be provided by the team.
 
-## 4. Run a Local Experiment: Edit JSON → Run Models → View Results
+## 4. 🧪 Run a Local Experiment: Edit JSON → Run Models → View Results
 
 Run all commands below from the project root, which contains `main.py`, and activate the environment first:
 
@@ -171,6 +184,8 @@ For tree models, `early_stopping_rounds` also controls validation-based early st
 Parameters must satisfy the implementation constraints: PatchTST requires `d_model` to be divisible by `n_heads`, `0 < stride <= patch_len <= window`, and `(window - patch_len)` to be divisible by `stride`. If GRU uses `num_layers=1`, set `dropout=0` as well.
 
 
+
+<a name="run-models"></a>
 
 ### 4.3 Run Experiments and Use Command-Line Arguments
 
@@ -322,7 +337,7 @@ It displays a result table for each stock, including the simple baselines and so
 
 
 
-## 5. File Structure
+## 5. 🗺️ File Structure
 
 ```text
 stock_prediction/
